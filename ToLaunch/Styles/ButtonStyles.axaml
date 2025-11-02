@@ -1,0 +1,45 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Reusable button style to avoid stacked shadows on button wrappers -->
+  <Style x:Key="ActionButtonStyle" Selector="Button">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="#333"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Padding" Value="8,4"/>
+    <Setter Property="Cursor" Value="Hand"/>
+  </Style>
+
+  <!-- Icon-only button style for centered icon content -->
+  <Style x:Key="IconButtonStyle" Selector="Button">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="#333"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <!-- Default icon button size; individual buttons may override Width/Height -->
+    <Setter Property="Width" Value="40"/>
+    <Setter Property="Height" Value="40"/>
+  </Style>
+
+  <!-- New: style for buttons that combine an icon + text
+       Note: `BasedOn` removed because this project/Avalonia version doesn't support it.
+       Base setters from ActionButtonStyle are duplicated here. -->
+  <Style x:Key="IconTextButtonStyle" Selector="Button">
+    <!-- duplicated from ActionButtonStyle -->
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="#333"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Cursor" Value="Hand"/>
+
+    <!-- icon+text specific -->
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="Padding" Value="8,6"/>
+  </Style>
+
+</ResourceDictionary>

@@ -1,0 +1,174 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+		xmlns:vm="using:ToLaunch.ViewModels"
+		xmlns:views="using:ToLaunch.Views"
+		xmlns:material="using:Material.Icons.Avalonia"
+		xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+		xmlns:controls="clr-namespace:Avalonia.Themes.Neumorphism.Controls;assembly=Avalonia.Themes.Neumorphism"
+		xmlns:assist="clr-namespace:Avalonia.Themes.Neumorphism.Assist;assembly=Avalonia.Themes.Neumorphism"
+		x:Class="ToLaunch.Views.MainWindow"
+		x:DataType="vm:MainWindowViewModel"
+		Icon="/Assets/ToLaunch.ico"
+		Width="800" Height="800"
+		Title="ToLaunch"
+		Background="#e0e0e0">
+
+	<Design.DataContext>
+		<vm:MainWindowViewModel/>
+	</Design.DataContext>
+
+	<DockPanel>
+		<!-- Header -->
+		<StackPanel DockPanel.Dock="Top" Margin="8" Spacing="8">
+			<!-- Top Row: Profile and Settings Buttons -->
+			<Border Height="60" CornerRadius="12">
+				<StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="16">
+					<!-- Main Program Icon Button (Circle) -->
+					<Border CornerRadius="12" Margin="8,26,0,0" Padding="4">
+						<controls:FloatingButton ToolTip.Tip="Select Main Program"
+												 Command="{Binding LoadProfileCommand}"
+												 Cursor="Hand"
+												 Background="LightBlue"
+												 BorderBrush="White"
+												 BorderThickness="2"
+												 Width="52"
+												 Height="52">
+							<controls:FloatingButton.Content>
+								<Border Width="48" Height="48"
+										CornerRadius="24"
+										ClipToBounds="True">
+									<Grid>
+										<!-- Show main program icon if available -->
+										<Image Source="{Binding MainProgramIcon}"
+											   Stretch="UniformToFill"
+											   IsVisible="{Binding MainProgramIcon, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+										<!-- Show rocket icon as fallback -->
+										<icons:MaterialIcon Kind="Rocket"
+															Width="32" Height="32"
+															Foreground="White"
+															IsVisible="{Binding MainProgramIcon, Converter={x:Static ObjectConverters.IsNull}}"/>
+									</Grid>
+								</Border>
+							</controls:FloatingButton.Content>
+						</controls:FloatingButton>
+					</Border>
+					<!-- Profile Selection -->
+					<Border CornerRadius="12" Padding="16">
+						<ComboBox Theme="{StaticResource ComboBoxOutset}"
+								  Width="500"
+								  Height="42"
+								  CornerRadius="100"
+								  HorizontalAlignment="Center"
+								  PlaceholderText="Select or enter profile name"
+								  ToolTip.Tip="Choose or create a profile set"
+								  ItemsSource="{Binding Profiles}"
+								  SelectedItem="{Binding SelectedProfile}"
+								  IsEditable="True"
+								  assist:ComboBoxAssist.InnerLeftBackground="LightBlue"
+								  assist:ComboBoxAssist.InnerRightBackground="LightBlue">
+							<ComboBox.Styles>
+								<Style Selector="ComboBox">
+									<Setter Property="assist:ComboBoxAssist.InnerLeftContent">
+										<Setter.Value>
+											<Template>
+												<Button Theme="{StaticResource ButtonNoMaterial}"
+														Focusable="False"
+														Command="{Binding SaveProfileCommand}"
+														Margin="8,0,8,0"
+														Width="42"
+														Height="42"
+														ToolTip.Tip="Save current profile"
+														Cursor="Hand">
+													<icons:MaterialIcon Kind="ContentSave" Width="28" Height="28" Foreground="White" />
+												</Button>
+											</Template>
+										</Setter.Value>
+									</Setter>
+									<Setter Property="assist:ComboBoxAssist.InnerRightContent">
+										<Setter.Value>
+											<Template>
+												<Button Theme="{StaticResource ButtonNoMaterial}"
+														Focusable="False"
+														Command="{Binding StartAllCommand}"
+														Margin="8,0,8,0"
+														Width="42"
+														Height="42"
+														ToolTip.Tip="{Binding StartStopButtonText}"
+														Cursor="Hand">
+													<Panel>
+														<!-- Stop icon when programs are running -->
+														<icons:MaterialIcon Kind="Stop" Width="28" Height="28" Foreground="White"
+																			IsVisible="{Binding AreAnyProgramsRunning}"/>
+														<!-- Play icon when no programs are running -->
+														<icons:MaterialIcon Kind="Play" Width="28" Height="28" Foreground="White"
+																			IsVisible="{Binding !AreAnyProgramsRunning}"/>
+													</Panel>
+												</Button>
+											</Template>
+										</Setter.Value>
+									</Setter>
+								</Style>
+							</ComboBox.Styles>
+						</ComboBox>
+					</Border>
+					<!-- Profile Settings Button -->
+					<Border CornerRadius="12" Margin="8,26,0,0" Padding="4">
+						<controls:FloatingButton ToolTip.Tip="Application settings"
+												 Command="{Binding OpenApplicationSettingsCommand}"
+												 Cursor="Hand"
+												 Background="LightBlue"
+												 BorderBrush="White"
+												 BorderThickness="2">
+							<controls:FloatingButton.Content>
+								<icons:MaterialIcon Kind="SettingsOutline" Width="24" Height="24" Foreground="White" />
+							</controls:FloatingButton.Content>
+						</controls:FloatingButton>
+					</Border>
+				</StackPanel>
+			</Border>
+		</StackPanel>
+
+		<!-- Main Content - Cards Grid -->
+		<ScrollViewer>
+			<WrapPanel Orientation="Horizontal" Margin="16">
+				<!-- Existing Program Cards -->
+				<ItemsControl ItemsSource="{Binding LaunchCards}">
+					<ItemsControl.ItemsPanel>
+						<ItemsPanelTemplate>
+							<WrapPanel Orientation="Horizontal"/>
+						</ItemsPanelTemplate>
+					</ItemsControl.ItemsPanel>
+					<ItemsControl.ItemTemplate>
+						<DataTemplate>
+							<views:LaunchCardView/>
+						</DataTemplate>
+					</ItemsControl.ItemTemplate>
+				</ItemsControl>
+
+				<!-- Add Program Card (Dashed Border) -->
+				<Grid Width="300" Height="150" Margin="30,30,30,30" IsVisible="{Binding ShowAddCard}">
+					<!-- Dashed border using Path -->
+					<Path Stroke="#999" StrokeThickness="3" StrokeDashArray="4,4">
+						<Path.Data>
+							<RectangleGeometry Rect="0,0,300,150" RadiusX="12" RadiusY="12"/>
+						</Path.Data>
+					</Path>
+
+					<Border Background="#e0e0e0" CornerRadius="12" Padding="4">
+						<controls:FloatingButton
+						Command="{Binding AddProgramCommand}"
+						Cursor="Hand"
+						ToolTip.Tip="Add new program"
+						Background="LightBlue"
+						BorderBrush="White"
+						BorderThickness="2">
+							<controls:FloatingButton.Content>
+								<icons:MaterialIcon Kind="Add" Width="48" Height="48" Foreground="White" />
+							</controls:FloatingButton.Content>
+						</controls:FloatingButton>
+					</Border>
+				</Grid>
+			</WrapPanel>
+		</ScrollViewer>
+	</DockPanel>
+</Window>

@@ -1,0 +1,154 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 xmlns:vm="using:ToLaunch.ViewModels"
+			 xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+			 x:Class="ToLaunch.Views.LaunchCardSettingsView"
+			 x:DataType="vm:LaunchCardSettingsViewModel"
+			 Width="450">
+	<Border Classes="NeumorphismCard" Padding="24">
+		<StackPanel Spacing="12">
+			<!-- Path with Browse Button -->
+			<StackPanel Orientation="Horizontal" Spacing="8">
+				<TextBox Text="{Binding Path}"
+						 Watermark="Path to executable"
+						 HorizontalAlignment="Stretch"
+						 Width="340"/>
+				<Button Width="36" Height="36"
+						Command="{Binding BrowseExecutableCommand}"
+						ToolTip.Tip="Browse for executable">
+					<icons:MaterialIcon Kind="FolderOpen" Width="20" Height="20"/>
+				</Button>
+			</StackPanel>
+
+			<!-- Icon Preview -->
+			<StackPanel Orientation="Horizontal" Spacing="8">
+				<Image Width="24" Height="24" Source="{Binding IconBitmap}"/>
+				<TextBlock Text="Icon from application"
+						   FontSize="10"
+						   VerticalAlignment="Center"
+						   Foreground="#666"/>
+			</StackPanel>
+
+			<TextBox Text="{Binding Name}" Watermark="Program Name"/>
+			<TextBox Text="{Binding Arguments}"
+					 Watermark="Command Line Arguments"
+					 TextWrapping="Wrap"
+					 MinWidth="400"
+					 MaxHeight="60"/>
+
+			<!-- Advanced Settings Toggle Button -->
+			<Button Command="{Binding ToggleAdvancedSettingsCommand}"
+					HorizontalAlignment="Left"
+					Height="32"
+					Width="180"
+					Background="Transparent"
+					BorderThickness="0"
+					Padding="4"
+					Margin="0,8,0,0"
+					Cursor="Hand"
+					ToolTip.Tip="Show/Hide advanced settings">
+				<StackPanel Orientation="Horizontal" Spacing="6">
+					<icons:MaterialIcon Kind="ChevronRightCircle"
+										Width="18"
+										Height="18"
+										VerticalAlignment="Center"
+										IsVisible="{Binding !ShowAdvancedSettings}"
+										Foreground="#0066CC"/>
+					<icons:MaterialIcon Kind="ChevronDownCircle"
+										Width="18"
+										Height="18"
+										VerticalAlignment="Center"
+										IsVisible="{Binding ShowAdvancedSettings}"
+										Foreground="#0066CC"/>
+					<TextBlock Text="Advanced Settings"
+							   FontWeight="SemiBold"
+							   FontSize="14"
+							   VerticalAlignment="Center"
+							   Foreground="#0066CC"/>
+				</StackPanel>
+			</Button>
+
+			<!-- Advanced Settings Section -->
+			<StackPanel Spacing="12" IsVisible="{Binding ShowAdvancedSettings}">
+
+				<!-- Start Options -->
+				<StackPanel Orientation="Horizontal" Spacing="16">
+					<CheckBox Content="Start hidden" IsChecked="{Binding StartHidden}"/>
+					<CheckBox Content="Start on disconnect" IsChecked="{Binding StartOnDisconnect}"/>
+				</StackPanel>
+
+				<!-- Start/Stop with Program -->
+				<StackPanel Orientation="Horizontal" Spacing="4">
+					<CheckBox Content="Start" IsChecked="{Binding StartWithProgram}" Width="60"/>
+					<ComboBox ItemsSource="{Binding AvailablePrograms}"
+							  SelectedItem="{Binding SelectedStartProgram}"
+							  PlaceholderText="... with program"
+							  Width="310"/>
+				</StackPanel>
+
+				<StackPanel Orientation="Horizontal" Spacing="4">
+					<CheckBox Content="Stop" IsChecked="{Binding StopWithProgram}" Width="60"/>
+					<ComboBox ItemsSource="{Binding AvailablePrograms}"
+							  SelectedItem="{Binding SelectedStopProgram}"
+							  PlaceholderText="... with program"
+							  Width="310"/>
+				</StackPanel>
+
+				<StackPanel Orientation="Horizontal" Spacing="8">
+					<TextBlock Text="Delay Start/Stop"
+							   VerticalAlignment="Center"
+							   Width="110"/>
+					<!-- Delay Start -->
+					<NumericUpDown Value="{Binding DelayStartSeconds}"
+								   Minimum="0"
+								   Maximum="300"
+								   Increment="1"
+								   FormatString="0"
+								   Width="70"
+								   ShowButtonSpinner="True"
+								   ButtonSpinnerLocation="Right"
+								   AllowSpin="True"
+								   TextAlignment="Center"/>
+
+					<TextBlock Text="/" VerticalAlignment="Center"/>
+
+					<!-- Delay Stop -->
+					<NumericUpDown Value="{Binding DelayStopSeconds}"
+								   Minimum="0"
+								   Maximum="300"
+								   Increment="1"
+								   FormatString="0"
+								   Width="70"
+								   ShowButtonSpinner="True"
+								   ButtonSpinnerLocation="Right"
+								   AllowSpin="True"
+								   TextAlignment="Center"/>
+					<TextBlock Text="seconds" VerticalAlignment="Center"/>
+				</StackPanel>
+			</StackPanel>
+
+			<!-- Save and Delete Buttons -->
+			<StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Center" Margin="0,12,0,0">
+				<Button Command="{Binding SaveCommand}"
+						Classes="NeumorphismPrimary"
+						Height="40"
+						Width="120">
+					<StackPanel Orientation="Horizontal" Spacing="8">
+						<icons:MaterialIcon Kind="ContentSave" Width="18" Height="18"/>
+						<TextBlock Text="SAVE"/>
+					</StackPanel>
+				</Button>
+				<Button Command="{Binding DeleteCommand}"
+						Classes="NeumorphismDanger"
+						Height="40"
+						Width="120"
+						IsVisible="{Binding !IsNewProgram}">
+					<StackPanel Orientation="Horizontal" Spacing="8">
+						<icons:MaterialIcon Kind="Delete" Width="18" Height="18"/>
+						<TextBlock Text="DELETE"/>
+					</StackPanel>
+				</Button>
+			</StackPanel>
+		</StackPanel>
+	</Border>
+</UserControl>

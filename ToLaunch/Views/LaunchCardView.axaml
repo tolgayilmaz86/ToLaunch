@@ -1,0 +1,71 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 xmlns:vm="using:ToLaunch.ViewModels"
+			 xmlns:controls="clr-namespace:Avalonia.Themes.Neumorphism.Controls;assembly=Avalonia.Themes.Neumorphism"
+			 xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+			 xmlns:p1="clr-namespace:Avalonia.Themes.Neumorphism.Assist;assembly=Avalonia.Themes.Neumorphism"
+			 x:Class="ToLaunch.Views.LaunchCardView"
+			 x:DataType="vm:LaunchCardViewModel"
+			 MinWidth="340" MinHeight="90">
+	<StackPanel Margin="30" VerticalAlignment="Top">
+		<controls:Card Width="300" VerticalAlignment="Top" CornerRadius="15" Padding="30">
+			<controls:Card.Background>
+				<LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+					<GradientStop Color="#F0F0F3" Offset="0.0"/>
+					<GradientStop Color="#E8E8EB" Offset="0.5"/>
+					<GradientStop Color="#D5D5D8" Offset="1.0"/>
+				</LinearGradientBrush>
+			</controls:Card.Background>
+
+			<Grid RowDefinitions="Auto, Auto">
+				<!-- Header Row -->
+				<Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto">
+					<Image Grid.Column="0" Width="32" Height="32" Source="{Binding IconBitmap}"/>
+					<TextBlock Grid.Column="1" Classes="Subtitle2" Text="{Binding Name}" TextAlignment="Center" />
+					<Button Grid.Column="2" Classes="Icon" Width="40" Height="40" Margin="0"
+							Command="{Binding OpenSettingsCommand}">
+						<icons:MaterialIcon Kind="SettingsOutline" Width="20" Height="20" />
+					</Button>
+				</Grid>
+
+				<!-- Content Row with Start Button and Toggle Switch -->
+				<Grid Grid.Row="1" Margin="0,10,0,0">
+					<!-- Start Button centered -->
+					<Button Classes="Icon" Width="55" Height="55"
+							Background="LightBlue" BorderBrush="White" BorderThickness="2"
+							HorizontalAlignment="Center"
+							Command="{Binding StartCommand}">
+						<icons:MaterialIcon Width="48" Height="48" Foreground="White" Kind="{Binding IconKind}"/>
+					</Button>
+
+					<!-- Toggle Switch to enable disable program -->
+					<ToggleSwitch IsChecked="{Binding IsEnabled}"
+								  HorizontalAlignment="Right"
+								  VerticalAlignment="Bottom"
+								  Margin="0,0,-32,0"
+								  p1:ToggleSwitchAssist.SwitchTrackOnBackground="{StaticResource OnLightBlueGradient}"
+								  p1:ToggleSwitchAssist.SwitchTrackOffBackground="{StaticResource OffGrayGradient}"
+								  p1:ToggleSwitchAssist.SwitchTrackOnForeground="LightBlue"
+								  p1:ToggleSwitchAssist.SwitchTrackOffForeground="LightGray"
+								  BorderThickness="1"
+								  BorderBrush="{DynamicResource MaterialDesignBorderShadow}"
+								  Classes="LeftHeader"
+								  RenderTransformOrigin="1,0.5">
+						<ToggleSwitch.RenderTransform>
+							<ScaleTransform ScaleX="0.6" ScaleY="0.7"/>
+						</ToggleSwitch.RenderTransform>
+						<ToggleSwitch.Styles>
+							<Style Selector="ToggleSwitch">
+								<Setter Property="ToolTip.Tip" Value="Click to Enable"/>
+							</Style>
+							<Style Selector="ToggleSwitch:checked">
+								<Setter Property="ToolTip.Tip" Value="Click to Disable"/>
+							</Style>
+						</ToggleSwitch.Styles>
+					</ToggleSwitch>
+				</Grid>
+			</Grid>
+
+		</controls:Card>
+	</StackPanel>
+</UserControl>

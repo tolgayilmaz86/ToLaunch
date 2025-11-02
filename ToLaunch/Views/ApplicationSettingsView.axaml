@@ -1,0 +1,77 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 xmlns:vm="using:ToLaunch.ViewModels"
+			 x:Class="ToLaunch.Views.ApplicationSettingsView"
+			 x:DataType="vm:ApplicationSettingsViewModel"
+			 Width="400"
+			 Background="#e0e0e0">
+
+	<Design.DataContext>
+		<vm:ApplicationSettingsViewModel/>
+	</Design.DataContext>
+
+	<Border CornerRadius="12" Padding="24" Margin="16">
+		<StackPanel Spacing="16">
+
+			<!-- Start with Windows -->
+			<Border CornerRadius="8" Background="#d0d0d0" Padding="16">
+				<StackPanel Spacing="8">
+					<CheckBox IsChecked="{Binding StartWithWindows}"
+							  Content="Start with Windows"
+							  FontSize="14"
+							  FontWeight="SemiBold"/>
+					<TextBlock Text="Automatically start ToLaunch when Windows starts"
+							   FontSize="12"
+							   Foreground="#666"
+							   Margin="28,0,0,0"
+							   TextWrapping="Wrap"/>
+				</StackPanel>
+			</Border>
+
+			<!-- Close to System Tray -->
+			<Border CornerRadius="8" Background="#d0d0d0" Padding="16">
+				<StackPanel Spacing="8">
+					<CheckBox IsChecked="{Binding CloseToSystemTray}"
+							  Content="Close to System Tray"
+							  FontSize="14"
+							  FontWeight="SemiBold"/>
+					<TextBlock Text="Keep ToLaunch running in system tray when closing the window"
+							   FontSize="12"
+							   Foreground="#666"
+							   Margin="28,0,0,0"
+							   TextWrapping="Wrap"/>
+				</StackPanel>
+			</Border>
+
+			<!-- Minimize to System Tray -->
+			<Border CornerRadius="8" Background="#d0d0d0" Padding="16">
+				<StackPanel Spacing="8">
+					<CheckBox IsChecked="{Binding MinimizeToSystemTray}"
+							  Content="Minimize to System Tray"
+							  FontSize="14"
+							  FontWeight="SemiBold"/>
+					<TextBlock Text="Minimize ToLaunch to system tray instead of taskbar"
+							   FontSize="12"
+							   Foreground="#666"
+							   Margin="28,0,0,0"
+							   TextWrapping="Wrap"/>
+				</StackPanel>
+			</Border>
+
+			<!-- Start Main Program with Start All -->
+			<Border CornerRadius="8" Background="#d0d0d0" Padding="16">
+				<StackPanel Spacing="8">
+					<CheckBox IsChecked="{Binding StartMainProgramWithStartAll}"
+							  Content="Start Main Program with Start All"
+							  FontSize="14"
+							  FontWeight="SemiBold"/>
+					<TextBlock Text="When clicking 'Start All', also launch the main program. Disable this if the main program is already running."
+							   FontSize="12"
+							   Foreground="#666"
+							   Margin="28,0,0,0"
+							   TextWrapping="Wrap"/>
+				</StackPanel>
+			</Border>
+		</StackPanel>
+	</Border>
+</UserControl>
