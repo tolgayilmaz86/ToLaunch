@@ -3,7 +3,7 @@
 ; Download from: https://jrsoftware.org/isdl.php
 
 #define MyAppName "ToLaunch"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.2.0"
 #define MyAppPublisher "ToLaunch Contributors"
 #define MyAppURL "https://github.com/tolgayilmaz86/ToLaunch"
 #define MyAppExeName "ToLaunch.exe"
