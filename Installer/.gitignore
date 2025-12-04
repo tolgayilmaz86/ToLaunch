@@ -1,0 +1,15 @@
+# Installer build outputs
+output/
+publish/
+*.exe
+
+# WiX Installer build outputs (legacy)
+bin/
+obj/
+*.msi
+*.wixpdb
+*.wixobj
+*.cab
+
+# Generated file list
+PublishFiles.wxs

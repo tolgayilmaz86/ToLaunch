@@ -1,15 +1,26 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 <PropertyGroup>
-  <OutputType>WinExe</OutputType>
-  <TargetFramework>net8.0</TargetFramework>
-  <Nullable>enable</Nullable>
-  <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
-  <ApplicationManifest>app.manifest</ApplicationManifest>
+<OutputType>WinExe</OutputType>
+<TargetFramework>net8.0</TargetFramework>
+<Nullable>enable</Nullable>
+<BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+<ApplicationManifest>app.manifest</ApplicationManifest>
+<ApplicationIcon>Assets\ToLaunch.ico</ApplicationIcon>
   <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   <Version>0.1.0</Version>
   <AssemblyVersion>0.1.0.0</AssemblyVersion>
   <FileVersion>0.1.0.0</FileVersion>
+  
+  <!-- Framework-dependent deployment (requires .NET 8 runtime on target machine) -->
+  <SelfContained>false</SelfContained>
+  
+  <!-- Don't append runtime identifier to output path -->
+  <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  
+  <!-- Disable PDB file generation in Release builds -->
+  <DebugType Condition="'$(Configuration)' == 'Release'">None</DebugType>
+  <DebugSymbols Condition="'$(Configuration)' == 'Release'">false</DebugSymbols>
 </PropertyGroup>
 
   <ItemGroup>
