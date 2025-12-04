@@ -19,11 +19,14 @@
 		<TrayIcons>
 			<TrayIcon Icon="/Assets/ToLaunch.ico" ToolTipText="ToLaunch">
 				<TrayIcon.Menu>
-					<NativeMenu>
-						<NativeMenuItem Header="Show" Click="TrayIcon_Show_Click"/>
-						<NativeMenuItemSeparator/>
-						<NativeMenuItem Header="Exit" Click="TrayIcon_Exit_Click"/>
-					</NativeMenu>
+				<NativeMenu>
+				<NativeMenuItem Header="Show" Click="TrayIcon_Show_Click"/>
+				<NativeMenuItemSeparator/>
+				<NativeMenuItem Header="Start All" Click="TrayIcon_StartAll_Click"/>
+				<NativeMenuItem Header="Stop All" Click="TrayIcon_StopAll_Click"/>
+				<NativeMenuItemSeparator/>
+				<NativeMenuItem Header="Exit" Click="TrayIcon_Exit_Click"/>
+				</NativeMenu>
 				</TrayIcon.Menu>
 			</TrayIcon>
 		</TrayIcons>
