@@ -11,6 +11,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using System.Diagnostics;
 using System.Threading;
+using System.Reflection;
 
 namespace ToLaunch.ViewModels;
 public partial class MainWindowViewModel : ViewModelBase
@@ -18,8 +19,43 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<LaunchCardViewModel> LaunchCards { get; } = [];
     public ObservableCollection<string> Profiles { get; } = [];
 
+    /// <summary>
+    /// Combined collection of all launch cards plus the add button placeholder.
+    /// This allows all items to flow naturally in a WrapPanel.
+    /// </summary>
+    public IEnumerable<object> AllCardsWithAddButton
+    {
+        get
+        {
+            foreach (var card in LaunchCards)
+            {
+                yield return card;
+            }
+            if (ShowAddCard)
+            {
+                yield return AddCardPlaceholder.Instance;
+            }
+        }
+    }
+
+    public static string AppVersion
+    {
+        get
+        {
+            var version = Assembly.GetExecutingAssembly().GetName().Version;
+            return version != null ? $"{version.Major}.{version.Minor}" : "0.1";
+        }
+    }
+
+    public string WindowTitle => $"ToLaunch v{AppVersion}";
+
     [ObservableProperty]
     private bool showAddCard = true;
+
+    partial void OnShowAddCardChanged(bool value)
+    {
+        OnPropertyChanged(nameof(AllCardsWithAddButton));
+    }
 
     [ObservableProperty]
     private string? selectedProfile = "Default";
@@ -107,6 +143,9 @@ public partial class MainWindowViewModel : ViewModelBase
         SaveProfileCommand = new RelayCommand(async () => await SaveProfileWithDialogAsync());
         OpenApplicationSettingsCommand = new RelayCommand(OpenApplicationSettings);
         LoadProfileCommand = new RelayCommand(async () => await SelectMainProgramAsync());
+
+        // Subscribe to collection changes to update AllCardsWithAddButton
+        LaunchCards.CollectionChanged += (s, e) => OnPropertyChanged(nameof(AllCardsWithAddButton));
 
         EnsureProfilesFolderExists();
         LoadAvailableProfiles();

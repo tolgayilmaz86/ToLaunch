@@ -9,4 +9,5 @@ public class AppSettings
     public bool CloseToSystemTray { get; set; }
     public bool MinimizeToSystemTray { get; set; }
     public bool StartMainProgramWithStartAll { get; set; } = false;
+    public bool RunAsAdministrator { get; set; }
 }

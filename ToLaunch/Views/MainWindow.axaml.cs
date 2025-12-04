@@ -3,15 +3,58 @@ using ToLaunch.ViewModels;
 using Avalonia.Platform.Storage;
 using System.Linq;
 using System.Threading.Tasks;
+using System.ComponentModel;
+using ToLaunch.Services;
 
 namespace ToLaunch.Views;
 public partial class MainWindow : Window
 {
     private MainWindowViewModel? ViewModel => DataContext as MainWindowViewModel;
+    private bool _forceClose = false;
 
     public MainWindow()
     {
         InitializeComponent();
+        Closing += MainWindow_Closing;
+    }
+
+    private void MainWindow_Closing(object? sender, WindowClosingEventArgs e)
+    {
+        // If force close is set, allow the window to close
+        if (_forceClose)
+            return;
+
+        // Check if CloseToSystemTray is enabled
+        if (ViewModel?.AppSettings.CloseToSystemTray == true)
+        {
+            e.Cancel = true;
+            Hide();
+        }
+    }
+
+    protected override void OnPropertyChanged(Avalonia.AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+
+        // Handle MinimizeToSystemTray
+        if (change.Property == WindowStateProperty)
+        {
+            var newState = (WindowState?)change.NewValue;
+            if (newState == WindowState.Minimized && ViewModel?.AppSettings.MinimizeToSystemTray == true)
+            {
+                Hide();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Forces the window to close, bypassing the system tray setting.
+    /// Called when user clicks "Exit" from the tray menu.
+    /// </summary>
+    public void ForceClose()
+    {
+        _forceClose = true;
+        Close();
     }
 
     protected override void OnDataContextChanged(System.EventArgs e)
@@ -119,6 +162,7 @@ public partial class MainWindow : Window
     private async void ShowApplicationSettingsDialog()
     {
         var viewModel = new ApplicationSettingsViewModel();
+        var wasRunAsAdmin = ViewModel?.AppSettings.RunAsAdministrator ?? false;
 
         if (ViewModel != null)
         {
@@ -147,9 +191,29 @@ public partial class MainWindow : Window
             ViewModel.AppSettings.CloseToSystemTray = result.CloseToSystemTray;
             ViewModel.AppSettings.MinimizeToSystemTray = result.MinimizeToSystemTray;
             ViewModel.AppSettings.StartMainProgramWithStartAll = result.StartMainProgramWithStartAll;
+            ViewModel.AppSettings.RunAsAdministrator = result.RunAsAdministrator;
 
             // Persist to disk
             ViewModel.SaveAppSettings();
+
+            // If Run as Administrator was just enabled and we're not already running as admin, restart with elevation
+            if (result.RunAsAdministrator && !wasRunAsAdmin && !AdminHelper.IsRunningAsAdministrator())
+            {
+                if (AdminHelper.RestartAsAdministrator())
+                {
+                    // Successfully started elevated process, close this one
+                    if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+                    {
+                        desktop.Shutdown();
+                    }
+                }
+                else
+                {
+                    // User cancelled or restart failed, revert the setting
+                    ViewModel.AppSettings.RunAsAdministrator = false;
+                    ViewModel.SaveAppSettings();
+                }
+            }
         }
     }
 

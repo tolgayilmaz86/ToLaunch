@@ -42,6 +42,12 @@ public class ProgramLaunchService
             if (process != null)
             {
                 _runningProcesses[card.Name] = process;
+
+                // If starting hidden, use Windows API to aggressively hide the window
+                if (card.StartHidden)
+                {
+                    _ = WindowHider.TryHideProcessWindowsAsync(process, maxAttempts: 10, delayBetweenAttempts: 300);
+                }
             }
         }
         catch (Exception ex)

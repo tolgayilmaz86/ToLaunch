@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ToLaunch.Models;
+using ToLaunch.Services;
 using System.Diagnostics;
 using System;
 using Avalonia.Media.Imaging;
@@ -186,6 +187,14 @@ public partial class LaunchCardViewModel : ObservableObject
 
             _process = Process.Start(startInfo);
             IsRunning = true;
+
+            // If starting hidden, use Windows API to aggressively hide the window
+            // Many applications ignore ProcessWindowStyle.Hidden, so we need to force it
+            if (StartHidden && _process != null)
+            {
+                // Fire and forget - don't block the UI while trying to hide windows
+                _ = WindowHider.TryHideProcessWindowsAsync(_process, maxAttempts: 10, delayBetweenAttempts: 300);
+            }
         }
         catch (Exception ex)
         {
@@ -202,8 +211,35 @@ public partial class LaunchCardViewModel : ObservableObject
 
         try
         {
-            _process?.Kill();
-            _process?.Dispose();
+            // First try to kill the tracked process if it exists and hasn't exited
+            if (_process != null && !_process.HasExited)
+            {
+                _process.Kill();
+                _process.Dispose();
+                _process = null;
+                IsRunning = false;
+                return;
+            }
+
+            // If no tracked process or it has exited, try to find and kill by process name
+            if (!string.IsNullOrWhiteSpace(Path))
+            {
+                var processName = System.IO.Path.GetFileNameWithoutExtension(Path);
+                var processes = Process.GetProcessesByName(processName);
+                foreach (var proc in processes)
+                {
+                    try
+                    {
+                        proc.Kill();
+                        proc.Dispose();
+                    }
+                    catch
+                    {
+                        // Process may have already exited
+                    }
+                }
+            }
+
             _process = null;
             IsRunning = false;
         }

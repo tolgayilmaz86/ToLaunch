@@ -1,4 +1,4 @@
-﻿<Window xmlns="https://github.com/avaloniaui"
+<Window xmlns="https://github.com/avaloniaui"
 		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 		xmlns:vm="using:ToLaunch.ViewModels"
 		xmlns:views="using:ToLaunch.Views"
@@ -10,7 +10,7 @@
 		x:DataType="vm:MainWindowViewModel"
 		Icon="/Assets/ToLaunch.ico"
 		Width="800" Height="800"
-		Title="ToLaunch"
+		Title="{Binding WindowTitle}"
 		Background="#e0e0e0">
 
 	<Design.DataContext>
@@ -130,45 +130,44 @@
 
 		<!-- Main Content - Cards Grid -->
 		<ScrollViewer>
-			<WrapPanel Orientation="Horizontal" Margin="16">
-				<!-- Existing Program Cards -->
-				<ItemsControl ItemsSource="{Binding LaunchCards}">
-					<ItemsControl.ItemsPanel>
-						<ItemsPanelTemplate>
-							<WrapPanel Orientation="Horizontal"/>
-						</ItemsPanelTemplate>
-					</ItemsControl.ItemsPanel>
-					<ItemsControl.ItemTemplate>
-						<DataTemplate>
-							<views:LaunchCardView/>
-						</DataTemplate>
-					</ItemsControl.ItemTemplate>
-				</ItemsControl>
+			<ItemsControl ItemsSource="{Binding AllCardsWithAddButton}" Margin="16">
+				<ItemsControl.ItemsPanel>
+					<ItemsPanelTemplate>
+						<WrapPanel Orientation="Horizontal"/>
+					</ItemsPanelTemplate>
+				</ItemsControl.ItemsPanel>
+				<ItemsControl.DataTemplates>
+					<!-- Template for Launch Cards -->
+					<DataTemplate DataType="vm:LaunchCardViewModel">
+						<views:LaunchCardView/>
+					</DataTemplate>
+					<!-- Template for Add Card Placeholder -->
+					<DataTemplate DataType="vm:AddCardPlaceholder">
+						<Grid Width="300" Height="150" Margin="30,30,30,30">
+							<!-- Dashed border using Path -->
+							<Path Stroke="#999" StrokeThickness="3" StrokeDashArray="4,4">
+								<Path.Data>
+									<RectangleGeometry Rect="0,0,300,150" RadiusX="12" RadiusY="12"/>
+								</Path.Data>
+							</Path>
 
-				<!-- Add Program Card (Dashed Border) -->
-				<Grid Width="300" Height="150" Margin="30,30,30,30" IsVisible="{Binding ShowAddCard}">
-					<!-- Dashed border using Path -->
-					<Path Stroke="#999" StrokeThickness="3" StrokeDashArray="4,4">
-						<Path.Data>
-							<RectangleGeometry Rect="0,0,300,150" RadiusX="12" RadiusY="12"/>
-						</Path.Data>
-					</Path>
-
-					<Border Background="#e0e0e0" CornerRadius="12" Padding="4">
-						<controls:FloatingButton
-						Command="{Binding AddProgramCommand}"
-						Cursor="Hand"
-						ToolTip.Tip="Add new program"
-						Background="LightBlue"
-						BorderBrush="White"
-						BorderThickness="2">
-							<controls:FloatingButton.Content>
-								<icons:MaterialIcon Kind="Add" Width="48" Height="48" Foreground="White" />
-							</controls:FloatingButton.Content>
-						</controls:FloatingButton>
-					</Border>
-				</Grid>
-			</WrapPanel>
+							<Border Background="#e0e0e0" CornerRadius="12" Padding="4">
+								<controls:FloatingButton
+								Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).AddProgramCommand}"
+								Cursor="Hand"
+								ToolTip.Tip="Add new program"
+								Background="LightBlue"
+								BorderBrush="White"
+								BorderThickness="2">
+									<controls:FloatingButton.Content>
+										<icons:MaterialIcon Kind="Add" Width="48" Height="48" Foreground="White" />
+									</controls:FloatingButton.Content>
+								</controls:FloatingButton>
+							</Border>
+						</Grid>
+					</DataTemplate>
+				</ItemsControl.DataTemplates>
+			</ItemsControl>
 		</ScrollViewer>
 	</DockPanel>
 </Window>

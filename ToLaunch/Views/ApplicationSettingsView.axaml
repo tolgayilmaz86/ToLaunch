@@ -28,6 +28,21 @@
 				</StackPanel>
 			</Border>
 
+			<!-- Run as Administrator -->
+			<Border CornerRadius="8" Background="#d0d0d0" Padding="16">
+				<StackPanel Spacing="8">
+					<CheckBox IsChecked="{Binding RunAsAdministrator}"
+							  Content="Run as Administrator"
+							  FontSize="14"
+							  FontWeight="SemiBold"/>
+					<TextBlock Text="Start ToLaunch with elevated privileges"
+							   FontSize="12"
+							   Foreground="#666"
+							   Margin="28,0,0,0"
+							   TextWrapping="Wrap"/>
+				</StackPanel>
+			</Border>
+
 			<!-- Close to System Tray -->
 			<Border CornerRadius="8" Background="#d0d0d0" Padding="16">
 				<StackPanel Spacing="8">

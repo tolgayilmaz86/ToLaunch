@@ -14,4 +14,18 @@
 		<themes:NeumorphismTheme BaseTheme="Light" PrimaryColor="LightBlue" SecondaryColor="Lime" />
 		<StyleInclude Source="avares://Material.Icons.Avalonia/MaterialIconStyles.axaml" />
 	</Application.Styles>
+
+	<TrayIcon.Icons>
+		<TrayIcons>
+			<TrayIcon Icon="/Assets/ToLaunch.ico" ToolTipText="ToLaunch">
+				<TrayIcon.Menu>
+					<NativeMenu>
+						<NativeMenuItem Header="Show" Click="TrayIcon_Show_Click"/>
+						<NativeMenuItemSeparator/>
+						<NativeMenuItem Header="Exit" Click="TrayIcon_Exit_Click"/>
+					</NativeMenu>
+				</TrayIcon.Menu>
+			</TrayIcon>
+		</TrayIcons>
+	</TrayIcon.Icons>
 </Application>
