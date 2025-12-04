@@ -9,7 +9,7 @@ public class ProgramModel
 
     // Start/Stop Options
     public bool StartHidden { get; set; }
-    public bool StartOnDisconnect { get; set; }
+    public bool StopOnExit { get; set; } = true;
     public bool StartWithProgram { get; set; }
     public string? StartWithProgramName { get; set; }
     public bool StopWithProgram { get; set; }

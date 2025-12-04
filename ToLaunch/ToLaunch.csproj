@@ -8,10 +8,10 @@
 <ApplicationIcon>Assets\ToLaunch.ico</ApplicationIcon>
   <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-  <Version>0.1.0</Version>
-  <AssemblyVersion>0.1.0.0</AssemblyVersion>
-  <FileVersion>0.1.0.0</FileVersion>
-  
+  <Version>0.2.0</Version>
+  <AssemblyVersion>0.2.0.0</AssemblyVersion>
+  <FileVersion>0.2.0.0</FileVersion>
+
   <!-- Framework-dependent deployment (requires .NET 8 runtime on target machine) -->
   <SelfContained>false</SelfContained>
   

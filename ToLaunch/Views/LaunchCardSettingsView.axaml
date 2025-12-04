@@ -71,10 +71,10 @@
 			<!-- Advanced Settings Section -->
 			<StackPanel Spacing="12" IsVisible="{Binding ShowAdvancedSettings}">
 
-				<!-- Start Options -->
+                <!-- Start Options -->
 				<StackPanel Orientation="Horizontal" Spacing="16">
 					<CheckBox Content="Start hidden" IsChecked="{Binding StartHidden}"/>
-					<CheckBox Content="Start on disconnect" IsChecked="{Binding StartOnDisconnect}"/>
+					<CheckBox Content="Stop on exit" IsChecked="{Binding StopOnExit}"/>
 				</StackPanel>
 
 				<!-- Start/Stop with Program -->

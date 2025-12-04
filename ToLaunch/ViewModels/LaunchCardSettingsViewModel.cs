@@ -35,7 +35,7 @@ public partial class LaunchCardSettingsViewModel : ViewModelBase
     private bool startHidden;
 
     [ObservableProperty]
-    private bool startOnDisconnect;
+    private bool stopOnExit = true;
 
     [ObservableProperty]
     private bool startWithProgram;
@@ -103,7 +103,7 @@ public partial class LaunchCardSettingsViewModel : ViewModelBase
         Arguments = model.Arguments;
         IsEnabled = model.IsEnabled;
         StartHidden = model.StartHidden;
-        StartOnDisconnect = model.StartOnDisconnect;
+        StopOnExit = model.StopOnExit;
         StartWithProgram = model.StartWithProgram;
         SelectedStartProgram = model.StartWithProgramName;
         StopWithProgram = model.StopWithProgram;
@@ -145,7 +145,7 @@ public partial class LaunchCardSettingsViewModel : ViewModelBase
             IconPath = IconPath,
             IsEnabled = IsEnabled,
             StartHidden = StartHidden,
-            StartOnDisconnect = StartOnDisconnect,
+            StopOnExit = StopOnExit,
             StartWithProgram = StartWithProgram,
             StartWithProgramName = SelectedStartProgram,
             StopWithProgram = StopWithProgram,

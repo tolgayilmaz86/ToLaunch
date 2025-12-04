@@ -304,6 +304,18 @@ public partial class MainWindowViewModel : ViewModelBase
         else if (!isRunning && _mainProgramWasRunning)
         {
             _mainProgramWasRunning = false;
+
+            // Stop all enabled cards with StopOnExit enabled
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                foreach (var card in LaunchCards)
+                {
+                    if (card.IsEnabled && card.StopOnExit && card.IsRunning)
+                    {
+                        _ = card.StartCommand.ExecuteAsync(null); // This will stop the program since it's running
+                    }
+                }
+            });
         }
     }
 
