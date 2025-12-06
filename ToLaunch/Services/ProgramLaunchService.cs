@@ -15,6 +15,12 @@ public class ProgramLaunchService
         if (string.IsNullOrWhiteSpace(card.Path) || !System.IO.File.Exists(card.Path))
             return;
 
+        // Check if the program is already running
+        if (IsProgramAlreadyRunning(card.Path))
+        {
+            return;
+        }
+
         // Check if should start with another program
         if (card.StartWithProgram && !string.IsNullOrEmpty(card.StartWithProgramName))
         {
@@ -83,5 +89,33 @@ public class ProgramLaunchService
     {
         return _runningProcesses.ContainsKey(programName) &&
                !_runningProcesses[programName].HasExited;
+    }
+
+    /// <summary>
+    /// Checks if a program is already running by looking for processes with matching name.
+    /// </summary>
+    private static bool IsProgramAlreadyRunning(string programPath)
+    {
+        if (string.IsNullOrWhiteSpace(programPath))
+            return false;
+
+        try
+        {
+            var processName = System.IO.Path.GetFileNameWithoutExtension(programPath);
+            var processes = Process.GetProcessesByName(processName);
+            var isRunning = processes.Length > 0;
+
+            // Dispose the process objects to avoid resource leaks
+            foreach (var proc in processes)
+            {
+                proc.Dispose();
+            }
+
+            return isRunning;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

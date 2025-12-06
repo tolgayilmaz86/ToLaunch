@@ -165,10 +165,45 @@ public partial class LaunchCardViewModel : ObservableObject
         OnSettingsRequested?.Invoke(this);
     }
 
+    /// <summary>
+    /// Checks if the program is already running by looking for processes with matching name.
+    /// </summary>
+    private bool IsProgramAlreadyRunning()
+    {
+        if (string.IsNullOrWhiteSpace(Path))
+            return false;
+
+        try
+        {
+            var processName = System.IO.Path.GetFileNameWithoutExtension(Path);
+            var processes = Process.GetProcessesByName(processName);
+            var isRunning = processes.Length > 0;
+
+            // Dispose the process objects to avoid resource leaks
+            foreach (var proc in processes)
+            {
+                proc.Dispose();
+            }
+
+            return isRunning;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private async System.Threading.Tasks.Task StartProgramAsync()
     {
         if (string.IsNullOrWhiteSpace(Path) || !System.IO.File.Exists(Path))
             return;
+
+        // Check if program is already running
+        if (IsProgramAlreadyRunning())
+        {
+            IsRunning = true;
+            return;
+        }
 
         if (DelayStartSeconds > 0)
         {
