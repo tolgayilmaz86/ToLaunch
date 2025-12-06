@@ -5,12 +5,20 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.ComponentModel;
 using ToLaunch.Services;
+using System.Runtime.InteropServices;
 
 namespace ToLaunch.Views;
 public partial class MainWindow : Window
 {
     private MainWindowViewModel? ViewModel => DataContext as MainWindowViewModel;
     private bool _forceClose = false;
+
+    // Win32 interop for removing minimize button
+    [DllImport("user32.dll")]
+    private static extern int GetWindowLong(nint hWnd, int nIndex);
+
+    [DllImport("user32.dll")]
+    private static extern int SetWindowLong(nint hWnd, int nIndex, int dwNewLong);
 
     public MainWindow()
     {
@@ -175,9 +183,26 @@ public partial class MainWindow : Window
             SizeToContent = SizeToContent.WidthAndHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
+            ShowInTaskbar = false,
+            MinWidth = 0,
+            MinHeight = 0,
             Content = new ApplicationSettingsView
             {
                 DataContext = viewModel
+            }
+        };
+
+        // Remove minimize button (Windows-specific via Win32 interop)
+        dialog.Opened += (s, e) =>
+        {
+            var platformHandle = dialog.TryGetPlatformHandle();
+            if (platformHandle != null)
+            {
+                var hwnd = platformHandle.Handle;
+                const int GWL_STYLE = -16;
+                const int WS_MINIMIZEBOX = 0x20000;
+                var style = GetWindowLong(hwnd, GWL_STYLE);
+                SetWindowLong(hwnd, GWL_STYLE, style & ~WS_MINIMIZEBOX);
             }
         };
 
