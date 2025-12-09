@@ -30,6 +30,9 @@ public static class LogService
 
         try
         {
+            // Clean up the log file from previous session
+            ClearLogFile();
+
             // Add a trace listener that writes to our log file
             Trace.Listeners.Add(new LogTraceListener(_logFilePath));
             _initialized = true;
@@ -41,6 +44,24 @@ public static class LogService
         {
             // If we can't initialize logging, write to console
             Console.WriteLine($"Failed to initialize logging: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Clears the log file. Called at application startup.
+    /// </summary>
+    private static void ClearLogFile()
+    {
+        try
+        {
+            if (File.Exists(_logFilePath))
+            {
+                File.Delete(_logFilePath);
+            }
+        }
+        catch
+        {
+            // Silently fail if we can't delete the log file
         }
     }
 
