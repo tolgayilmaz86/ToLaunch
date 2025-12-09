@@ -17,14 +17,57 @@
 		<vm:MainWindowViewModel/>
 	</Design.DataContext>
 
-	<DockPanel>
-		<!-- Header -->
-		<StackPanel DockPanel.Dock="Top" Margin="8" Spacing="8">
-			<!-- Top Row: Profile and Settings Buttons -->
-			<Border Height="60" CornerRadius="12">
-				<StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="16">
+	<Grid>
+		<!-- Main Content - Cards Grid (placed first so it renders behind the header) -->
+		<ScrollViewer>
+			<ItemsControl ItemsSource="{Binding AllCardsWithAddButton}" Margin="16,82,16,16">
+				<ItemsControl.ItemsPanel>
+					<ItemsPanelTemplate>
+						<WrapPanel Orientation="Horizontal"/>
+					</ItemsPanelTemplate>
+				</ItemsControl.ItemsPanel>
+				<ItemsControl.DataTemplates>
+					<!-- Template for Launch Cards -->
+					<DataTemplate DataType="vm:LaunchCardViewModel">
+						<views:LaunchCardView/>
+					</DataTemplate>
+					<!-- Template for Add Card Placeholder -->
+					<DataTemplate DataType="vm:AddCardPlaceholder">
+						<Grid Width="300" Height="150" Margin="30,30,30,30">
+							<!-- Dashed border using Path -->
+							<Path Stroke="#999" StrokeThickness="3" StrokeDashArray="4,4">
+								<Path.Data>
+									<RectangleGeometry Rect="0,0,300,150" RadiusX="12" RadiusY="12"/>
+								</Path.Data>
+							</Path>
+
+							<Border Background="#e0e0e0" CornerRadius="12" Padding="4">
+								<controls:FloatingButton
+								Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).AddProgramCommand}"
+								Cursor="Hand"
+								ToolTip.Tip="Add new program"
+								Background="LightBlue"
+								BorderBrush="White"
+								BorderThickness="2">
+									<controls:FloatingButton.Content>
+										<icons:MaterialIcon Kind="Add" Width="48" Height="48" Foreground="White" />
+									</controls:FloatingButton.Content>
+								</controls:FloatingButton>
+							</Border>
+						</Grid>
+					</DataTemplate>
+				</ItemsControl.DataTemplates>
+			</ItemsControl>
+		</ScrollViewer>
+
+		<!-- Header (placed second so it renders on top, transparent background lets items scroll behind) -->
+		<Border VerticalAlignment="Top" Background="Transparent" Padding="8">
+		<StackPanel Spacing="8">
+		<!-- Top Row: Profile and Settings Buttons -->
+		<Border Height="50" CornerRadius="12" Background="Transparent">
+					<StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="16">
 					<!-- Main Program Icon Button (Circle) -->
-					<Border CornerRadius="12" Margin="8,26,0,0" Padding="4">
+					<Border CornerRadius="12" Margin="8,0,0,0" Padding="4" Background="Transparent">
 						<controls:FloatingButton ToolTip.Tip="Select Main Program"
 												 Command="{Binding LoadProfileCommand}"
 												 Cursor="Hand"
@@ -53,19 +96,20 @@
 						</controls:FloatingButton>
 					</Border>
 					<!-- Profile Selection -->
-					<Border CornerRadius="12" Padding="16">
-						<ComboBox Theme="{StaticResource ComboBoxOutset}"
-								  Width="500"
-								  Height="42"
-								  CornerRadius="100"
-								  HorizontalAlignment="Center"
-								  PlaceholderText="Select or enter profile name"
-								  ToolTip.Tip="Choose or create a profile set"
-								  ItemsSource="{Binding Profiles}"
-								  SelectedItem="{Binding SelectedProfile}"
-								  IsEditable="True"
-								  assist:ComboBoxAssist.InnerLeftBackground="LightBlue"
-								  assist:ComboBoxAssist.InnerRightBackground="LightBlue">
+					<Border CornerRadius="12" Padding="8,-6,0,0" Background="Transparent">
+					<ComboBox Theme="{StaticResource ComboBoxOutset}"
+						Width="500"
+						Height="42"
+						CornerRadius="100"
+						HorizontalAlignment="Center"
+						PlaceholderText="Select or enter profile name"
+						ToolTip.Tip="Choose or create a profile set"
+						ItemsSource="{Binding Profiles}"
+						SelectedItem="{Binding SelectedProfile}"
+						IsEditable="True"
+						Background="#e0e0e0"
+						assist:ComboBoxAssist.InnerLeftBackground="LightBlue"
+						assist:ComboBoxAssist.InnerRightBackground="LightBlue">
 							<ComboBox.Styles>
 								<Style Selector="ComboBox">
 									<Setter Property="assist:ComboBoxAssist.InnerLeftContent">
@@ -112,7 +156,7 @@
 						</ComboBox>
 					</Border>
 					<!-- Profile Settings Button -->
-					<Border CornerRadius="12" Margin="8,26,0,0" Padding="4">
+					<Border CornerRadius="12" Margin="8,0,0,0" Padding="4" Background="Transparent">
 						<controls:FloatingButton ToolTip.Tip="Application settings"
 												 Command="{Binding OpenApplicationSettingsCommand}"
 												 Cursor="Hand"
@@ -127,47 +171,6 @@
 				</StackPanel>
 			</Border>
 		</StackPanel>
-
-		<!-- Main Content - Cards Grid -->
-		<ScrollViewer>
-			<ItemsControl ItemsSource="{Binding AllCardsWithAddButton}" Margin="16">
-				<ItemsControl.ItemsPanel>
-					<ItemsPanelTemplate>
-						<WrapPanel Orientation="Horizontal"/>
-					</ItemsPanelTemplate>
-				</ItemsControl.ItemsPanel>
-				<ItemsControl.DataTemplates>
-					<!-- Template for Launch Cards -->
-					<DataTemplate DataType="vm:LaunchCardViewModel">
-						<views:LaunchCardView/>
-					</DataTemplate>
-					<!-- Template for Add Card Placeholder -->
-					<DataTemplate DataType="vm:AddCardPlaceholder">
-						<Grid Width="300" Height="150" Margin="30,30,30,30">
-							<!-- Dashed border using Path -->
-							<Path Stroke="#999" StrokeThickness="3" StrokeDashArray="4,4">
-								<Path.Data>
-									<RectangleGeometry Rect="0,0,300,150" RadiusX="12" RadiusY="12"/>
-								</Path.Data>
-							</Path>
-
-							<Border Background="#e0e0e0" CornerRadius="12" Padding="4">
-								<controls:FloatingButton
-								Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).AddProgramCommand}"
-								Cursor="Hand"
-								ToolTip.Tip="Add new program"
-								Background="LightBlue"
-								BorderBrush="White"
-								BorderThickness="2">
-									<controls:FloatingButton.Content>
-										<icons:MaterialIcon Kind="Add" Width="48" Height="48" Foreground="White" />
-									</controls:FloatingButton.Content>
-								</controls:FloatingButton>
-							</Border>
-						</Grid>
-					</DataTemplate>
-				</ItemsControl.DataTemplates>
-			</ItemsControl>
-		</ScrollViewer>
-	</DockPanel>
+		</Border>
+	</Grid>
 </Window>
