@@ -158,7 +158,11 @@ public partial class LaunchCardViewModel : ObservableObject
     [RelayCommand]
     private async Task Start()
     {
-        if (IsRunning)
+        // Check both the IsRunning flag AND if the process is actually running
+        bool actuallyRunning = !string.IsNullOrWhiteSpace(Path) && 
+                               ProgramLaunchService.IsProgramAlreadyRunning(Path);
+        
+        if (IsRunning || actuallyRunning)
         {
             await StopProgramAsync();
         }

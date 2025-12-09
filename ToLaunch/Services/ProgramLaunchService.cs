@@ -501,19 +501,66 @@ public class ProgramLaunchService
             await Task.Delay(card.DelayStopSeconds * 1000);
         }
 
+        bool stopped = false;
+
+        // First try to stop the tracked process
         if (_runningProcesses.TryGetValue(card.Name, out var process))
         {
             try
             {
-                process.Kill();
+                if (!process.HasExited)
+                {
+                    process.Kill();
+                    LogService.LogInfo($"Stopped tracked process {card.Name}");
+                    stopped = true;
+                }
                 process.Dispose();
                 _runningProcesses.Remove(card.Name);
-                LogService.LogInfo($"Stopped process {card.Name}");
             }
             catch (Exception ex)
             {
-                LogService.LogError($"Failed to stop {card.Name}", ex);
+                LogService.LogError($"Failed to stop tracked process {card.Name}", ex);
             }
+        }
+
+        // Also try to find and kill by process name (handles externally started processes)
+        if (!string.IsNullOrWhiteSpace(card.Path))
+        {
+            try
+            {
+                var processName = System.IO.Path.GetFileNameWithoutExtension(card.Path);
+                var processes = Process.GetProcessesByName(processName);
+                
+                foreach (var proc in processes)
+                {
+                    try
+                    {
+                        if (!proc.HasExited)
+                        {
+                            proc.Kill();
+                            LogService.LogInfo($"Stopped process {card.Name} (found by name, PID: {proc.Id})");
+                            stopped = true;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        LogService.LogError($"Failed to stop process PID {proc.Id}", ex);
+                    }
+                    finally
+                    {
+                        proc.Dispose();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogService.LogError($"Failed to find process by name for {card.Name}", ex);
+            }
+        }
+
+        if (!stopped)
+        {
+            LogService.LogWarning($"No running process found to stop for {card.Name}");
         }
     }
 
@@ -525,8 +572,9 @@ public class ProgramLaunchService
 
     /// <summary>
     /// Checks if a program is already running by looking for processes with matching name.
+    /// This is useful for checking programs that may have been started externally.
     /// </summary>
-    private static bool IsProgramAlreadyRunning(string programPath)
+    public static bool IsProgramAlreadyRunning(string programPath)
     {
         if (string.IsNullOrWhiteSpace(programPath))
             return false;

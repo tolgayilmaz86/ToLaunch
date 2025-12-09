@@ -74,12 +74,16 @@ public partial class App : Application
                 var mainWindow = desktop.MainWindow;
                 if (mainWindow?.DataContext is MainWindowViewModel viewModel)
                 {
-                    // Stop all running programs
+                    // Stop all enabled programs that are actually running (check by process name)
                     foreach (var card in viewModel.LaunchCards)
                     {
-                        if (card.IsRunning)
+                        if (card.IsEnabled && !string.IsNullOrWhiteSpace(card.Path))
                         {
-                            card.StartCommand.Execute(null);
+                            // Check if the process is actually running, not just the IsRunning flag
+                            if (card.IsRunning || Services.ProgramLaunchService.IsProgramAlreadyRunning(card.Path))
+                            {
+                                card.StartCommand.Execute(null);
+                            }
                         }
                     }
                 }
