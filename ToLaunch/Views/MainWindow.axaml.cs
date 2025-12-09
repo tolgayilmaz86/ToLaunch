@@ -218,6 +218,9 @@ public partial class MainWindow : Window
             ViewModel.AppSettings.StartMainProgramWithStartAll = result.StartMainProgramWithStartAll;
             ViewModel.AppSettings.RunAsAdministrator = result.RunAsAdministrator;
 
+            // Apply Start with Windows setting to registry
+            StartupService.SetStartWithWindows(result.StartWithWindows);
+
             // Persist to disk
             ViewModel.SaveAppSettings();
 
