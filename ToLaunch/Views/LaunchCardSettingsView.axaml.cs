@@ -5,6 +5,7 @@ using ToLaunch.ViewModels;
 using System.Linq;
 using CommunityToolkit.Mvvm.Input;
 using System;
+using ToLaunch.Services;
 
 namespace ToLaunch.Views;
 public partial class LaunchCardSettingsView : UserControl
@@ -91,7 +92,7 @@ public partial class LaunchCardSettingsView : UserControl
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Icon extraction failed: {ex.Message}");
+                LogService.LogError($"Icon extraction failed: {ex.Message}");
                 // Use default icon on exception
                 ViewModel.IconPath = string.Empty;
                 ViewModel.LoadIconBitmap(string.Empty);

@@ -44,7 +44,7 @@ public class IconService
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to extract icon: {ex.Message}");
+            LogService.LogError($"Failed to extract icon: {ex.Message}");
             return null;
         }
     }
@@ -83,7 +83,7 @@ public class IconService
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to extract icon from executable: {ex.Message}");
+            LogService.LogError($"Failed to extract icon from executable: {ex.Message}");
             return null;
         }
     }

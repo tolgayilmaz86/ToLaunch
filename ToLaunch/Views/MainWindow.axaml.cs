@@ -120,7 +120,7 @@ public partial class MainWindow : Window
 
             // Auto-save profile after adding program
             ViewModel.SaveCurrentProfile();
-            System.Diagnostics.Debug.WriteLine($"Profile auto-saved after adding program: {result.Name}");
+            LogService.LogError($"Profile auto-saved after adding program: {result.Name}");
         }
     }
 
@@ -151,7 +151,7 @@ public partial class MainWindow : Window
 
             // Auto-save profile after deleting program
             ViewModel.SaveCurrentProfile();
-            System.Diagnostics.Debug.WriteLine($"Profile auto-saved after deleting program: {card.Name}");
+            LogService.LogInfo($"Profile auto-saved after deleting program: {card.Name}");
         }
         else if (viewModel.SaveRequested)
         {
@@ -162,7 +162,7 @@ public partial class MainWindow : Window
             if (ViewModel != null)
             {
                 ViewModel.SaveCurrentProfile();
-                System.Diagnostics.Debug.WriteLine($"Profile auto-saved after editing program: {result.Name}");
+                LogService.LogInfo($"Profile auto-saved after editing program: {result.Name}");
             }
         }
     }
@@ -202,7 +202,13 @@ public partial class MainWindow : Window
                 const int GWL_STYLE = -16;
                 const int WS_MINIMIZEBOX = 0x20000;
                 var style = GetWindowLong(hwnd, GWL_STYLE);
-                SetWindowLong(hwnd, GWL_STYLE, style & ~WS_MINIMIZEBOX);
+                var minimizedStyle = style & ~WS_MINIMIZEBOX;
+                var result = SetWindowLong(hwnd, GWL_STYLE, minimizedStyle);
+                // If SetWindowLong fails, it returns 0. Optionally, log or handle the error.
+                if (result == 0)
+                {
+                    LogService.LogWarning("Failed to update window style to remove minimize button.");
+                }
             }
         };
 
@@ -279,7 +285,7 @@ public partial class MainWindow : Window
             ]
         });
 
-        return files?.FirstOrDefault()?.Path.LocalPath;
+        return files != null && files.Count > 0 ? files[0].Path.LocalPath : null;
     }
 
     private async Task<string?> ShowSelectMainProgramDialog(string? defaultPath)
@@ -300,6 +306,6 @@ public partial class MainWindow : Window
             ]
         });
 
-        return files?.FirstOrDefault()?.Path.LocalPath;
+        return files != null && files.Count > 0 ? files[0].Path.LocalPath : null;
     }
 }

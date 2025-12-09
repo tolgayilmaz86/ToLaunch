@@ -18,4 +18,10 @@ public class ProgramModel
     // Delay Options
     public int DelayStartSeconds { get; set; }
     public int DelayStopSeconds { get; set; }
+
+    // Priority Option
+    public ProcessPriority Priority { get; set; } = ProcessPriority.Default;
+
+    // CPU Affinity - stores the bitmask of selected cores (0 = use all cores/default)
+    public long CpuAffinity { get; set; } = 0;
 }

@@ -14,6 +14,9 @@ internal sealed class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        // Initialize logging first
+        LogService.Initialize();
+
         // Check if the app should run as administrator on startup
         if (ShouldRestartAsAdmin())
         {
@@ -25,7 +28,15 @@ internal sealed class Program
             // If restart failed or was cancelled, continue running without elevation
         }
 
-        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        try
+        {
+            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        }
+        catch (Exception ex)
+        {
+            LogService.LogError("Unhandled exception in application", ex);
+            throw;
+        }
     }
 
     private static bool ShouldRestartAsAdmin()

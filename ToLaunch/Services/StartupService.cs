@@ -28,7 +28,7 @@ public static class StartupService
             using var key = Registry.CurrentUser.OpenSubKey(RegistryRunKey, writable: true);
             if (key == null)
             {
-                Debug.WriteLine("Failed to open registry key for startup.");
+                LogService.LogWarning("Failed to open registry key for startup.");
                 return false;
             }
 
@@ -38,26 +38,26 @@ public static class StartupService
                 var exePath = Environment.ProcessPath;
                 if (string.IsNullOrEmpty(exePath))
                 {
-                    Debug.WriteLine("Failed to get executable path.");
+                    LogService.LogError("Failed to get executable path.");
                     return false;
                 }
 
                 // Add to startup with quoted path to handle spaces
                 key.SetValue(AppName, $"\"{exePath}\"");
-                Debug.WriteLine($"Added ToLaunch to Windows startup: {exePath}");
+                LogService.LogInfo($"Added ToLaunch to Windows startup: {exePath}");
             }
             else
             {
                 // Remove from startup
                 key.DeleteValue(AppName, throwOnMissingValue: false);
-                Debug.WriteLine("Removed ToLaunch from Windows startup.");
+                LogService.LogInfo("Removed ToLaunch from Windows startup.");
             }
 
             return true;
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to set startup registry: {ex.Message}");
+            LogService.LogError($"Failed to set startup registry: {ex.Message}");
             return false;
         }
     }
@@ -82,7 +82,7 @@ public static class StartupService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to check startup registry: {ex.Message}");
+            LogService.LogError($"Failed to check startup registry: {ex.Message}");
             return false;
         }
     }

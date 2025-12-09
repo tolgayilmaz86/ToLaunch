@@ -52,12 +52,12 @@ public static class WindowHider
                 if (process.MainWindowHandle != IntPtr.Zero)
                 {
                     ShowWindow(process.MainWindowHandle, SW_HIDE);
-                    Debug.WriteLine($"Hidden window for process {process.ProcessName} (attempt {attempt + 1})");
+                    LogService.LogInfo($"Hidden window for process {process.ProcessName} (attempt {attempt + 1})");
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error hiding window (attempt {attempt + 1}): {ex.Message}");
+                LogService.LogError($"Error hiding window (attempt {attempt + 1}): {ex.Message}");
             }
         }
     }
@@ -86,12 +86,12 @@ public static class WindowHider
                 if (process.MainWindowHandle != IntPtr.Zero)
                 {
                     ShowWindow(process.MainWindowHandle, SW_SHOWMINNOACTIVE);
-                    Debug.WriteLine($"Minimized window for process {process.ProcessName} (attempt {attempt + 1})");
+                    LogService.LogInfo($"Minimized window for process {process.ProcessName} (attempt {attempt + 1})");
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error minimizing window (attempt {attempt + 1}): {ex.Message}");
+                LogService.LogError($"Error minimizing window (attempt {attempt + 1}): {ex.Message}");
             }
         }
     }

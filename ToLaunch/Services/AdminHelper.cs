@@ -42,7 +42,7 @@ public static class AdminHelper
 
             if (string.IsNullOrEmpty(exePath))
             {
-                Debug.WriteLine("Could not determine executable path for elevation restart");
+                LogService.LogWarning("Could not determine executable path for elevation restart");
                 return false;
             }
 
@@ -59,12 +59,12 @@ public static class AdminHelper
         catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
         {
             // User cancelled UAC prompt
-            Debug.WriteLine("User cancelled UAC prompt");
+            LogService.LogWarning("User cancelled UAC prompt");
             return false;
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to restart as administrator: {ex.Message}");
+            LogService.LogError($"Failed to restart as administrator: {ex.Message}");
             return false;
         }
     }

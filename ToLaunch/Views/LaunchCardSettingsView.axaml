@@ -71,7 +71,7 @@
 			<!-- Advanced Settings Section -->
 			<StackPanel Spacing="12" IsVisible="{Binding ShowAdvancedSettings}">
 
-                <!-- Start Options -->
+				<!-- Start Options -->
 				<StackPanel Orientation="Horizontal" Spacing="16">
 					<CheckBox Content="Start hidden" IsChecked="{Binding StartHidden}"/>
 					<CheckBox Content="Stop on exit" IsChecked="{Binding StopOnExit}"/>
@@ -124,6 +124,92 @@
 								   AllowSpin="True"
 								   TextAlignment="Center"/>
 					<TextBlock Text="seconds" VerticalAlignment="Center"/>
+				</StackPanel>
+
+				<!-- Admin Rights Notice -->
+				<Border Background="#FFF3CD"
+						BorderBrush="#FFECB5"
+						BorderThickness="1"
+						CornerRadius="4"
+						Padding="8"
+						Margin="0,4,0,0">
+					<StackPanel Orientation="Horizontal" Spacing="8">
+						<icons:MaterialIcon Kind="ShieldAlertOutline"
+											Width="16"
+											Height="16"
+											Foreground="#856404"
+											VerticalAlignment="Center"/>
+						<TextBlock Text="Priority and CPU Affinity may require administrator rights.
+										 Make sure you set admin rights from ToLaunch settings."
+								   FontSize="11"
+								   Foreground="#856404"
+								   TextWrapping="Wrap"
+								   MaxWidth="300"
+								   VerticalAlignment="Center"/>
+					</StackPanel>
+				</Border>
+
+				<!-- Process Priority -->
+				<StackPanel Orientation="Horizontal" Spacing="8">
+					<TextBlock Text="Priority"
+							   VerticalAlignment="Center"
+							   Width="110"/>
+					<RadioButton Content="Default"
+								 IsChecked="{Binding PriorityDefault}"
+								 GroupName="Priority"
+								 VerticalAlignment="Center"/>
+					<RadioButton Content="Low"
+								 IsChecked="{Binding PriorityLow}"
+								 GroupName="Priority"
+								 VerticalAlignment="Center"/>
+					<RadioButton Content="High"
+								 IsChecked="{Binding PriorityHigh}"
+								 GroupName="Priority"
+								 VerticalAlignment="Center"/>
+				</StackPanel>
+
+				<!-- CPU Affinity -->
+				<StackPanel Spacing="4">
+					<StackPanel Orientation="Horizontal" Spacing="8">
+						<TextBlock Text="CPU Affinity"
+								   VerticalAlignment="Center"
+								   Width="110"/>
+						<CheckBox Content="Default"
+								  IsChecked="{Binding UseAllCores}"
+								  VerticalAlignment="Center"/>
+						<Button Content="All"
+								Command="{Binding SelectAllCoresCommand}"
+								Padding="8,2"
+								FontSize="11"
+								Height="24"/>
+						<Button Content="Clear"
+								Command="{Binding DeselectAllCoresCommand}"
+								Padding="8,2"
+								FontSize="11"
+								Height="24"/>
+					</StackPanel>
+					<Border BorderBrush="#ccc"
+							BorderThickness="1"
+							CornerRadius="4"
+							Padding="8"
+							Margin="0,4,0,0"
+							IsVisible="{Binding !UseAllCores}">
+						<ItemsControl ItemsSource="{Binding CpuCores}">
+							<ItemsControl.ItemsPanel>
+								<ItemsPanelTemplate>
+									<WrapPanel Orientation="Horizontal" ItemWidth="90"/>
+								</ItemsPanelTemplate>
+							</ItemsControl.ItemsPanel>
+							<ItemsControl.ItemTemplate>
+								<DataTemplate DataType="vm:CpuCoreViewModel">
+									<CheckBox Content="{Binding DisplayName}"
+											  IsChecked="{Binding IsSelected}"
+											  Margin="2"
+											  FontSize="11"/>
+								</DataTemplate>
+							</ItemsControl.ItemTemplate>
+						</ItemsControl>
+					</Border>
 				</StackPanel>
 			</StackPanel>
 

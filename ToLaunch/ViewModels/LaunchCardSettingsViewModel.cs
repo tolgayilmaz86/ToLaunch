@@ -6,8 +6,30 @@ using System.Linq;
 using Avalonia.Media.Imaging;
 using System.IO;
 using Avalonia.Platform;
+using System.Diagnostics;
+using System;
 
 namespace ToLaunch.ViewModels;
+
+/// <summary>
+/// Represents a single CPU core for affinity selection.
+/// </summary>
+public partial class CpuCoreViewModel : ObservableObject
+{
+    [ObservableProperty]
+    private int coreIndex;
+
+    [ObservableProperty]
+    private bool isSelected = true;
+
+    public string DisplayName => $"CPU {CoreIndex}";
+
+    public CpuCoreViewModel(int index, bool selected = true)
+    {
+        CoreIndex = index;
+        IsSelected = selected;
+    }
+}
 
 public partial class LaunchCardSettingsViewModel : ViewModelBase
 {
@@ -64,6 +86,24 @@ public partial class LaunchCardSettingsViewModel : ViewModelBase
     [ObservableProperty]
     private bool showAdvancedSettings = false;
 
+    // Priority settings - using separate bools for radio button binding
+    [ObservableProperty]
+    private bool priorityDefault = true;
+
+    [ObservableProperty]
+    private bool priorityLow = false;
+
+    [ObservableProperty]
+    private bool priorityHigh = false;
+
+    // CPU Affinity settings
+    public ObservableCollection<CpuCoreViewModel> CpuCores { get; } = new();
+
+    [ObservableProperty]
+    private bool useAllCores = true;
+
+    public int CpuCoreCount => Environment.ProcessorCount;
+
     public ObservableCollection<string> AvailablePrograms { get; } = new();
 
     public bool SaveRequested { get; set; }
@@ -76,13 +116,24 @@ public partial class LaunchCardSettingsViewModel : ViewModelBase
     public LaunchCardSettingsViewModel()
     {
         LoadIconBitmap(string.Empty);
+        InitializeCpuCores();
     }
 
     public LaunchCardSettingsViewModel(ProgramModel model, ObservableCollection<LaunchCardViewModel> existingCards)
     {
         IsNewProgram = false;
+        InitializeCpuCores();
         LoadFromModel(model);
         LoadAvailablePrograms(existingCards);
+    }
+
+    private void InitializeCpuCores()
+    {
+        CpuCores.Clear();
+        for (int i = 0; i < Environment.ProcessorCount; i++)
+        {
+            CpuCores.Add(new CpuCoreViewModel(i, true));
+        }
     }
 
     public void LoadAvailablePrograms(ObservableCollection<LaunchCardViewModel> cards)
@@ -110,6 +161,8 @@ public partial class LaunchCardSettingsViewModel : ViewModelBase
         SelectedStopProgram = model.StopWithProgramName;
         DelayStartSeconds = model.DelayStartSeconds;
         DelayStopSeconds = model.DelayStopSeconds;
+        SetPriorityFromModel(model.Priority);
+        SetAffinityFromModel(model.CpuAffinity);
     }
 
     public void LoadIconBitmap(string iconFilePath)
@@ -151,8 +204,108 @@ public partial class LaunchCardSettingsViewModel : ViewModelBase
             StopWithProgram = StopWithProgram,
             StopWithProgramName = SelectedStopProgram,
             DelayStartSeconds = DelayStartSeconds,
-            DelayStopSeconds = DelayStopSeconds
+            DelayStopSeconds = DelayStopSeconds,
+            Priority = GetPriorityFromSelection(),
+            CpuAffinity = GetAffinityFromSelection()
         };
+    }
+
+    private void SetPriorityFromModel(ProcessPriority priority)
+    {
+        PriorityDefault = priority == ProcessPriority.Default;
+        PriorityLow = priority == ProcessPriority.Low;
+        PriorityHigh = priority == ProcessPriority.High;
+    }
+
+    private ProcessPriority GetPriorityFromSelection()
+    {
+        if (PriorityLow) return ProcessPriority.Low;
+        if (PriorityHigh) return ProcessPriority.High;
+        return ProcessPriority.Default;
+    }
+
+    private void SetAffinityFromModel(long affinity)
+    {
+        // 0 means use all cores (default)
+        if (affinity == 0)
+        {
+            UseAllCores = true;
+            foreach (var core in CpuCores)
+            {
+                core.IsSelected = true;
+            }
+        }
+        else
+        {
+            UseAllCores = false;
+            foreach (var core in CpuCores)
+            {
+                core.IsSelected = (affinity & (1L << core.CoreIndex)) != 0;
+            }
+        }
+    }
+
+    private long GetAffinityFromSelection()
+    {
+        if (UseAllCores)
+            return 0; // 0 means use all cores
+
+        long affinity = 0;
+        foreach (var core in CpuCores)
+        {
+            if (core.IsSelected)
+            {
+                affinity |= (1L << core.CoreIndex);
+            }
+        }
+
+        // If all cores are selected, return 0 (default)
+        if (affinity == ((1L << CpuCores.Count) - 1))
+            return 0;
+
+        // If no cores are selected, return 0 (use all)
+        if (affinity == 0)
+            return 0;
+
+        return affinity;
+    }
+
+    partial void OnUseAllCoresChanged(bool value)
+    {
+        if (value)
+        {
+            foreach (var core in CpuCores)
+            {
+                core.IsSelected = true;
+            }
+        }
+    }
+
+    partial void OnPriorityDefaultChanged(bool value)
+    {
+        if (value)
+        {
+            PriorityLow = false;
+            PriorityHigh = false;
+        }
+    }
+
+    partial void OnPriorityLowChanged(bool value)
+    {
+        if (value)
+        {
+            PriorityDefault = false;
+            PriorityHigh = false;
+        }
+    }
+
+    partial void OnPriorityHighChanged(bool value)
+    {
+        if (value)
+        {
+            PriorityDefault = false;
+            PriorityLow = false;
+        }
     }
 
     [RelayCommand]
@@ -160,5 +313,21 @@ public partial class LaunchCardSettingsViewModel : ViewModelBase
     {
         ShowAdvancedSettings = !ShowAdvancedSettings;
         OnPropertyChanged(nameof(ShowAdvancedSettings));
+    }
+
+    [RelayCommand]
+    private void SelectAllCores()
+    {
+        UseAllCores = true;
+    }
+
+    [RelayCommand]
+    private void DeselectAllCores()
+    {
+        UseAllCores = false;
+        foreach (var core in CpuCores)
+        {
+            core.IsSelected = false;
+        }
     }
 }

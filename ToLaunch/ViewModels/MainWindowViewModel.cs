@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using System.Diagnostics;
 using System.Threading;
 using System.Reflection;
+using ToLaunch.Services;
 
 namespace ToLaunch.ViewModels;
 public partial class MainWindowViewModel : ViewModelBase
@@ -238,11 +239,11 @@ public partial class MainWindowViewModel : ViewModelBase
                         FileName = MainProgramPath,
                         UseShellExecute = true
                     });
-                    System.Diagnostics.Debug.WriteLine($"Started main program: {MainProgramPath}");
+                    LogService.LogInfo($"Started main program: {MainProgramPath}");
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Failed to start main program: {ex.Message}");
+                    LogService.LogError("Failed to start main program", ex);
                 }
             }
 
@@ -280,6 +281,7 @@ public partial class MainWindowViewModel : ViewModelBase
             }
             catch
             {
+                LogService.LogWarning($"Failed to access process name for PID {p.Id}");
                 return false;
             }
         });
@@ -407,7 +409,7 @@ public partial class MainWindowViewModel : ViewModelBase
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Failed to extract main program icon: {ex.Message}");
+                LogService.LogError($"Failed to extract main program icon: {ex.Message}");
                 MainProgramIconPath = null;
                 MainProgramIcon = null;
             }
@@ -497,6 +499,7 @@ public partial class MainWindowViewModel : ViewModelBase
                     catch
                     {
                         MainProgramIcon = null;
+                        LogService.LogWarning($"Failed to load main program icon from path: {MainProgramIconPath}");
                     }
                 }
                 else
@@ -506,7 +509,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
                 // Load programs
                 LaunchCards.Clear();
-                foreach (var model in profileModel.Programs ?? new List<ProgramModel>())
+                foreach (var model in profileModel.Programs ?? [])
                 {
                     AddProgramFromModel(model);
                 }
@@ -530,12 +533,12 @@ public partial class MainWindowViewModel : ViewModelBase
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Failed to load profile {profileName}: {ex.Message}");
+                LogService.LogError($"Failed to load profile {profileName}: {ex.Message}");
             }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to load profile {profileName}: {ex.Message}");
+            LogService.LogError($"Failed to load profile {profileName}: {ex.Message}");
         }
     }
 
@@ -568,7 +571,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to save app settings: {ex.Message}");
+            LogService.LogError($"Failed to save app settings: {ex.Message}");
         }
     }
 
@@ -588,7 +591,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to load app settings: {ex.Message}");
+            LogService.LogError($"Failed to load app settings: {ex.Message}");
         }
     }
 }
