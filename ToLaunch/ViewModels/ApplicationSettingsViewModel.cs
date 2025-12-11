@@ -10,6 +10,9 @@ public partial class ApplicationSettingsViewModel : ViewModelBase
     private bool startWithWindows;
 
     [ObservableProperty]
+    private bool startMinimized;
+
+    [ObservableProperty]
     private bool closeToSystemTray;
 
     [ObservableProperty]
@@ -44,9 +47,10 @@ public partial class ApplicationSettingsViewModel : ViewModelBase
     {
     }
 
-    public ApplicationSettingsViewModel(bool startWithWindows, bool closeToSystemTray, bool minimizeToSystemTray, bool startMainProgramWithStartAll, bool runAsAdministrator)
+    public ApplicationSettingsViewModel(bool startWithWindows, bool startMinimized, bool closeToSystemTray, bool minimizeToSystemTray, bool startMainProgramWithStartAll, bool runAsAdministrator)
     {
         StartWithWindows = startWithWindows;
+        StartMinimized = startMinimized;
         CloseToSystemTray = closeToSystemTray;
         MinimizeToSystemTray = minimizeToSystemTray;
         StartMainProgramWithStartAll = startMainProgramWithStartAll;
@@ -58,6 +62,7 @@ public partial class ApplicationSettingsViewModel : ViewModelBase
         return new AppSettings
         {
             StartWithWindows = StartWithWindows,
+            StartMinimized = StartMinimized,
             CloseToSystemTray = CloseToSystemTray,
             MinimizeToSystemTray = MinimizeToSystemTray,
             StartMainProgramWithStartAll = StartMainProgramWithStartAll,
@@ -68,6 +73,7 @@ public partial class ApplicationSettingsViewModel : ViewModelBase
     public void LoadFromModel(AppSettings model)
     {
         StartWithWindows = model.StartWithWindows;
+        StartMinimized = model.StartMinimized;
         CloseToSystemTray = model.CloseToSystemTray;
         MinimizeToSystemTray = model.MinimizeToSystemTray;
         StartMainProgramWithStartAll = model.StartMainProgramWithStartAll;

@@ -17,7 +17,7 @@
 
 	<TrayIcon.Icons>
 		<TrayIcons>
-			<TrayIcon Icon="/Assets/ToLaunch.ico" ToolTipText="ToLaunch">
+			<TrayIcon Icon="/Assets/ToLaunch.ico" ToolTipText="ToLaunch" Clicked="TrayIcon_Show_Click">
 				<TrayIcon.Menu>
 				<NativeMenu>
 				<NativeMenuItem Header="Show" Click="TrayIcon_Show_Click"/>

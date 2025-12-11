@@ -219,6 +219,7 @@ public partial class MainWindow : Window
         {
             var result = viewModel.ToModel();
             ViewModel.AppSettings.StartWithWindows = result.StartWithWindows;
+            ViewModel.AppSettings.StartMinimized = result.StartMinimized;
             ViewModel.AppSettings.CloseToSystemTray = result.CloseToSystemTray;
             ViewModel.AppSettings.MinimizeToSystemTray = result.MinimizeToSystemTray;
             ViewModel.AppSettings.StartMainProgramWithStartAll = result.StartMainProgramWithStartAll;

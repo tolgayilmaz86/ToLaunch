@@ -42,8 +42,8 @@ public static class StartupService
                     return false;
                 }
 
-                // Add to startup with quoted path to handle spaces
-                key.SetValue(AppName, $"\"{exePath}\"");
+                // Add to startup with quoted path and --startup argument to indicate startup launch
+                key.SetValue(AppName, $"\"{exePath}\" --startup");
                 LogService.LogInfo($"Added ToLaunch to Windows startup: {exePath}");
             }
             else

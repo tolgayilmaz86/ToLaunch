@@ -27,7 +27,21 @@
 							   TextWrapping="Wrap"/>
 				</StackPanel>
 			</Border>
+			<!-- Start Minimized -->
+			<Border CornerRadius="8" Background="#d0d0d0" Padding="16">
+				<StackPanel Spacing="8">
+					<CheckBox IsChecked="{Binding StartMinimized}"
+					Content="Start Minimized"
+							  FontSize="14"
+							  FontWeight="SemiBold"/>
+					<TextBlock Text="Start ToLaunch minimized to system tray"
+					FontSize="12"
+					Foreground="#666"
+					Margin="28,0,0,0"
+					TextWrapping="Wrap"/>
 
+				</StackPanel>
+			</Border>
 			<!-- Run as Administrator -->
 			<Border CornerRadius="8" Background="#d0d0d0" Padding="16">
 				<StackPanel Spacing="8">
@@ -80,7 +94,7 @@
 							  Content="Start Main Program with Start All"
 							  FontSize="14"
 							  FontWeight="SemiBold"/>
-					<TextBlock Text="When clicking 'Start All', also launch the main program. Disable this if the main program is already running."
+					<TextBlock Text="Clicking 'Start All', also launches the main program. Disable this if the main program is already running."
 							   FontSize="12"
 							   Foreground="#666"
 							   Margin="28,0,0,0"
