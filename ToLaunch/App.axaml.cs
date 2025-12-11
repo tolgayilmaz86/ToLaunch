@@ -8,12 +8,16 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using ToLaunch.Models;
 using ToLaunch.ViewModels;
+using Avalonia.Platform;
+using System.ComponentModel;
 using ToLaunch.Views;
+using ToLaunch.Services;
 
 namespace ToLaunch;
 public partial class App : Application
 {
     private MainWindowViewModel? _viewModel;
+    private TrayIcon? _trayIcon;
 
     public override void Initialize()
     {
@@ -34,6 +38,45 @@ public partial class App : Application
             {
                 desktop.MainWindow = mainWindow;
             }
+            else
+            {
+                // If starting minimized, ensure Avalonia platform is initialized
+                // by showing a tiny invisible window briefly. This avoids creating
+                // platform-dependent resources (bitmaps/popups) while the platform
+                // is uninitialized when changing profile from the tray.
+                try
+                {
+                    var initWindow = new Window
+                    {
+                        Width = 0,
+                        Height = 0,
+                        ShowInTaskbar = false,
+                        Opacity = 0
+                    };
+                    initWindow.Opened += (s, e) => initWindow.Hide();
+                    // Show will initialize platform; hide immediately in Opened.
+                    initWindow.Show();
+                }
+                catch
+                {
+                    // Best-effort, ignore failures here
+                }
+            }
+        }
+
+        // Setup tray icon
+        _trayIcon = new TrayIcon
+        {
+            Icon = new WindowIcon(AssetLoader.Open(new Uri("avares://ToLaunch/Assets/ToLaunch.ico"))),
+            ToolTipText = "ToLaunch"
+        };
+        _trayIcon.Clicked += TrayIcon_Show_Click;
+        _trayIcon.Menu = BuildTrayMenu();
+        TrayIcon.SetIcons(this, [_trayIcon]);
+
+        if (_viewModel != null)
+        {
+            _viewModel.PropertyChanged += ViewModel_PropertyChanged;
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -139,5 +182,68 @@ public partial class App : Application
                 }
             }
         }
+    }
+
+    private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainWindowViewModel.SelectedProfile) || e.PropertyName == nameof(MainWindowViewModel.Profiles))
+        {
+            if (_trayIcon != null)
+            {
+                _trayIcon.Menu = BuildTrayMenu();
+            }
+        }
+    }
+
+    private NativeMenu BuildTrayMenu()
+    {
+        var menu = new NativeMenu();
+
+        // Show
+        var showItem = new NativeMenuItem("Show");
+        showItem.Click += TrayIcon_Show_Click;
+        menu.Add(showItem);
+
+        menu.Add(new NativeMenuItemSeparator());
+
+        // Start All
+        var startAllItem = new NativeMenuItem("Start All");
+        startAllItem.Click += TrayIcon_StartAll_Click;
+        menu.Add(startAllItem);
+
+        // Stop All
+        var stopAllItem = new NativeMenuItem("Stop All");
+        stopAllItem.Click += TrayIcon_StopAll_Click;
+        menu.Add(stopAllItem);
+
+        menu.Add(new NativeMenuItemSeparator());
+
+        // Profiles submenu
+        var profilesItem = new NativeMenuItem("Profiles");
+        var profilesMenu = new NativeMenu();
+        if (_viewModel != null)
+        {
+            foreach (var profile in _viewModel.Profiles)
+            {
+                var profileItem = new NativeMenuItem(profile)
+                {
+                    ToggleType = NativeMenuItemToggleType.Radio,
+                    IsChecked = profile == _viewModel.SelectedProfile
+                };
+                profileItem.Click += (s, e) => { if (_viewModel != null) _viewModel.SelectedProfile = profile; };
+                profilesMenu.Add(profileItem);
+            }
+        }
+        profilesItem.Menu = profilesMenu;
+        menu.Add(profilesItem);
+
+        menu.Add(new NativeMenuItemSeparator());
+
+        // Exit
+        var exitItem = new NativeMenuItem("Exit");
+        exitItem.Click += TrayIcon_Exit_Click;
+        menu.Add(exitItem);
+
+        return menu;
     }
 }
