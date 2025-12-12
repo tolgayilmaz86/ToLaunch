@@ -104,25 +104,27 @@
 								   Maximum="300"
 								   Increment="1"
 								   FormatString="0"
-								   Width="70"
+								   Width="100"
 								   ShowButtonSpinner="True"
 								   ButtonSpinnerLocation="Right"
 								   AllowSpin="True"
-								   TextAlignment="Center"/>
+								   TextAlignment="Center"
+								   IsReadOnly="False"/>
 
 					<TextBlock Text="/" VerticalAlignment="Center"/>
 
 					<!-- Delay Stop -->
 					<NumericUpDown Value="{Binding DelayStopSeconds}"
 								   Minimum="0"
-								   Maximum="300"
-								   Increment="1"
+								   Maximum="3600"
+								   Increment="10"
 								   FormatString="0"
-								   Width="70"
+								   Width="100"
 								   ShowButtonSpinner="True"
 								   ButtonSpinnerLocation="Right"
 								   AllowSpin="True"
-								   TextAlignment="Center"/>
+								   TextAlignment="Center"
+								   IsReadOnly="False"/>
 					<TextBlock Text="seconds" VerticalAlignment="Center"/>
 				</StackPanel>
 
