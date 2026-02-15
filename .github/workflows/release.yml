@@ -28,14 +28,14 @@ jobs:
       run: dotnet publish ToLaunch/ToLaunch.csproj --configuration Release --runtime win-x64 --self-contained true --output ./publish
 
     - name: Setup Inno Setup
-      uses: jrsoftware/setup-inno-setup@v1
+      uses: Minionguyjpro/Inno-Setup-Action@v1
       with:
         version: latest
 
     - name: Compile Installer
       run: |
         $version = "${{ github.ref_name }}".Substring(1)
-        iscc /DAppVersion=$version installer.iss
+        iscc installer/installer.iss
 
     - name: Create Release
       id: create_release
@@ -54,6 +54,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./ToLaunch-Setup.exe
+        asset_path: ./installer/ToLaunch-Setup.exe
         asset_name: ToLaunch-Setup.exe
         asset_content_type: application/octet-stream
