@@ -9,7 +9,7 @@
 #define MyAppExeName "ToLaunch.exe"
 
 ; Paths relative to this .iss file location (installer folder)
-#define SourcePath "publish"
+#define SourcePath "..\publish"
 #define OutputPath "output"
 
 [Setup]
