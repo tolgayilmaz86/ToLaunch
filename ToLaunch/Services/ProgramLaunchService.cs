@@ -574,6 +574,38 @@ public class ProgramLaunchService
     /// Checks if a program is already running by looking for processes with matching name.
     /// This is useful for checking programs that may have been started externally.
     /// </summary>
+    public static bool IsProgramAlreadyRunning(string programPath, Process[] allProcesses)
+    {
+        if (string.IsNullOrWhiteSpace(programPath))
+            return false;
+
+        try
+        {
+            var processName = System.IO.Path.GetFileNameWithoutExtension(programPath);
+            var isRunning = allProcesses.Any(p =>
+            {
+                try
+                {
+                    return p.ProcessName.Equals(processName, StringComparison.OrdinalIgnoreCase);
+                }
+                catch
+                {
+                    return false;
+                }
+            });
+
+            return isRunning;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Checks if a program is already running by looking for processes with matching name.
+    /// This is useful for checking programs that may have been started externally.
+    /// </summary>
     public static bool IsProgramAlreadyRunning(string programPath)
     {
         if (string.IsNullOrWhiteSpace(programPath))

@@ -266,14 +266,25 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void CheckMainProgramStatus(object? state)
     {
+        var allProcesses = Process.GetProcesses();
+
         if (string.IsNullOrWhiteSpace(MainProgramPath))
         {
             _mainProgramWasRunning = false;
+
+            // Update running status for all launch cards
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                foreach (var card in LaunchCards)
+                {
+                    card.UpdateRunningStatus(allProcesses);
+                }
+            });
             return;
         }
 
         var mainProgramName = Path.GetFileNameWithoutExtension(MainProgramPath);
-        var isRunning = Process.GetProcesses().Any(p =>
+        var isRunning = allProcesses.Any(p =>
         {
             try
             {
@@ -323,6 +334,15 @@ public partial class MainWindowViewModel : ViewModelBase
                 OnPropertyChanged(nameof(StartStopButtonText));
             });
         }
+
+        // Update running status for all launch cards
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            foreach (var card in LaunchCards)
+            {
+                card.UpdateRunningStatus(allProcesses);
+            }
+        });
     }
 
     private static void EnsureProfilesFolderExists()

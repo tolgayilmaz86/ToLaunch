@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore ToLaunch/ToLaunch.csproj
+
+    - name: Build
+      run: dotnet build ToLaunch/ToLaunch.csproj --configuration Release --no-restore
+
+    - name: Publish
+      run: dotnet publish ToLaunch/ToLaunch.csproj --configuration Release --runtime win-x64 --self-contained true --output ./publish
+
+    - name: Setup Inno Setup
+      uses: jrsoftware/setup-inno-setup@v1
+      with:
+        version: latest
+
+    - name: Compile Installer
+      run: |
+        $version = "${{ github.ref_name }}".Substring(1)
+        iscc /DAppVersion=$version installer.iss
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./ToLaunch-Setup.exe
+        asset_name: ToLaunch-Setup.exe
+        asset_content_type: application/octet-stream

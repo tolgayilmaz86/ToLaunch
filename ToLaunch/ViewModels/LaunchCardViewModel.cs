@@ -7,6 +7,9 @@ using Avalonia.Media.Imaging;
 using System.IO;
 using Material.Icons;
 using System.Threading.Tasks;
+using Avalonia.Media;
+using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace ToLaunch.ViewModels;
 public partial class LaunchCardViewModel : ObservableObject
@@ -66,6 +69,8 @@ public partial class LaunchCardViewModel : ObservableObject
 
     public MaterialIconKind IconKind => IsRunning ? MaterialIconKind.Stop : MaterialIconKind.Play;
 
+    public IBrush ButtonBackground => IsRunning ? new SolidColorBrush(Colors.LightCoral) : new SolidColorBrush(Colors.LightBlue);
+
     public Action<LaunchCardViewModel>? OnSettingsRequested { get; set; }
     public Action<LaunchCardViewModel>? OnDeleteRequested { get; set; }
     public Action? OnProgramChanged { get; set; }
@@ -97,6 +102,8 @@ public partial class LaunchCardViewModel : ObservableObject
         DelayStopSeconds = model.DelayStopSeconds;
         Priority = model.Priority;
         CpuAffinity = model.CpuAffinity;
+
+        UpdateRunningStatus();
     }
 
     public void LoadIconBitmap(string iconFilePath)
@@ -203,10 +210,37 @@ public partial class LaunchCardViewModel : ObservableObject
     partial void OnIsRunningChanged(bool value)
     {
         OnPropertyChanged(nameof(IconKind));
+        OnPropertyChanged(nameof(ButtonBackground));
     }
 
     partial void OnIsEnabledChanged(bool value)
     {
         OnProgramChanged?.Invoke();
+    }
+
+    public void UpdateRunningStatus()
+    {
+        if (string.IsNullOrWhiteSpace(Path))
+        {
+            IsRunning = false;
+            return;
+        }
+
+        // Check if the program is actually running (either started by us or externally)
+        bool isActuallyRunning = ProgramLaunchService.IsProgramAlreadyRunning(Path);
+        IsRunning = isActuallyRunning;
+    }
+
+    public void UpdateRunningStatus(Process[] allProcesses)
+    {
+        if (string.IsNullOrWhiteSpace(Path))
+        {
+            IsRunning = false;
+            return;
+        }
+
+        // Check if the program is actually running (either started by us or externally)
+        bool isActuallyRunning = ProgramLaunchService.IsProgramAlreadyRunning(Path, allProcesses);
+        IsRunning = isActuallyRunning;
     }
 }

@@ -3,7 +3,7 @@
 			 xmlns:vm="using:ToLaunch.ViewModels"
 			 x:Class="ToLaunch.Views.ApplicationSettingsView"
 			 x:DataType="vm:ApplicationSettingsViewModel"
-			 Width="400"
+			 Width="600"
 			 Background="#e0e0e0">
 
 	<Design.DataContext>
@@ -11,10 +11,9 @@
 	</Design.DataContext>
 
 	<Border CornerRadius="12" Padding="24" Margin="16">
-		<StackPanel Spacing="16">
-
-			<!-- Start with Windows -->
-			<Border CornerRadius="8" Background="#d0d0d0" Padding="16">
+		<Grid RowDefinitions="Auto, Auto, Auto" ColumnDefinitions="*, *">
+			<!-- Row 1, Col 1: Start with Windows -->
+			<Border Grid.Row="0" Grid.Column="0" CornerRadius="8" Background="#d0d0d0" Padding="16" Margin="0,0,8,8">
 				<StackPanel Spacing="8">
 					<CheckBox IsChecked="{Binding StartWithWindows}"
 							  Content="Start with Windows"
@@ -27,8 +26,9 @@
 							   TextWrapping="Wrap"/>
 				</StackPanel>
 			</Border>
-			<!-- Start Minimized -->
-			<Border CornerRadius="8" Background="#d0d0d0" Padding="16">
+
+			<!-- Row 1, Col 2: Start Minimized -->
+			<Border Grid.Row="0" Grid.Column="1" CornerRadius="8" Background="#d0d0d0" Padding="16" Margin="8,0,0,8">
 				<StackPanel Spacing="8">
 					<CheckBox IsChecked="{Binding StartMinimized}"
 					Content="Start Minimized"
@@ -39,11 +39,11 @@
 					Foreground="#666"
 					Margin="28,0,0,0"
 					TextWrapping="Wrap"/>
-
 				</StackPanel>
 			</Border>
-			<!-- Run as Administrator -->
-			<Border CornerRadius="8" Background="#d0d0d0" Padding="16">
+
+			<!-- Row 2, Col 1: Run as Administrator -->
+			<Border Grid.Row="1" Grid.Column="0" CornerRadius="8" Background="#d0d0d0" Padding="16" Margin="0,0,8,8">
 				<StackPanel Spacing="8">
 					<CheckBox IsChecked="{Binding RunAsAdministrator}"
 							  Content="Run as Administrator"
@@ -57,8 +57,8 @@
 				</StackPanel>
 			</Border>
 
-			<!-- Close to System Tray -->
-			<Border CornerRadius="8" Background="#d0d0d0" Padding="16">
+			<!-- Row 2, Col 2: Close to System Tray -->
+			<Border Grid.Row="1" Grid.Column="1" CornerRadius="8" Background="#d0d0d0" Padding="16" Margin="8,0,0,8">
 				<StackPanel Spacing="8">
 					<CheckBox IsChecked="{Binding CloseToSystemTray}"
 							  Content="Close to System Tray"
@@ -72,8 +72,8 @@
 				</StackPanel>
 			</Border>
 
-			<!-- Minimize to System Tray -->
-			<Border CornerRadius="8" Background="#d0d0d0" Padding="16">
+			<!-- Row 3, Col 1: Minimize to System Tray -->
+			<Border Grid.Row="2" Grid.Column="0" CornerRadius="8" Background="#d0d0d0" Padding="16" Margin="0,0,8,0">
 				<StackPanel Spacing="8">
 					<CheckBox IsChecked="{Binding MinimizeToSystemTray}"
 							  Content="Minimize to System Tray"
@@ -87,13 +87,19 @@
 				</StackPanel>
 			</Border>
 
-			<!-- Start Main Program with Start All -->
-			<Border CornerRadius="8" Background="#d0d0d0" Padding="16">
+			<!-- Row 3, Col 2: Start Main Program with Start All -->
+			<Border Grid.Row="2" Grid.Column="1" CornerRadius="8" Background="#d0d0d0" Padding="16" Margin="8,0,0,0">
 				<StackPanel Spacing="8">
 					<CheckBox IsChecked="{Binding StartMainProgramWithStartAll}"
-							  Content="Start Main Program with Start All"
 							  FontSize="14"
-							  FontWeight="SemiBold"/>
+							  FontWeight="SemiBold">
+						<CheckBox.Content>
+							<StackPanel Orientation="Vertical">
+								<TextBlock Text="Start Main Program with" />
+								<TextBlock Text="Start All" />
+							</StackPanel>
+						</CheckBox.Content>
+					</CheckBox>
 					<TextBlock Text="Clicking 'Start All', also launches the main program. Disable this if the main program is already running."
 							   FontSize="12"
 							   Foreground="#666"
@@ -101,6 +107,6 @@
 							   TextWrapping="Wrap"/>
 				</StackPanel>
 			</Border>
-		</StackPanel>
+		</Grid>
 	</Border>
 </UserControl>

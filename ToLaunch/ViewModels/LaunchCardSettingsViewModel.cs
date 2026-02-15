@@ -83,9 +83,6 @@ public partial class LaunchCardSettingsViewModel : ViewModelBase
     [ObservableProperty]
     private bool isNewProgram = true;
 
-    [ObservableProperty]
-    private bool showAdvancedSettings = false;
-
     // Priority settings - using separate bools for radio button binding
     [ObservableProperty]
     private bool priorityDefault = true;
@@ -306,13 +303,6 @@ public partial class LaunchCardSettingsViewModel : ViewModelBase
             PriorityDefault = false;
             PriorityLow = false;
         }
-    }
-
-    [RelayCommand]
-    private void ToggleAdvancedSettings()
-    {
-        ShowAdvancedSettings = !ShowAdvancedSettings;
-        OnPropertyChanged(nameof(ShowAdvancedSettings));
     }
 
     [RelayCommand]
