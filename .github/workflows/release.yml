@@ -28,9 +28,7 @@ jobs:
       run: dotnet publish ToLaunch/ToLaunch.csproj --configuration Release --runtime win-x64 --self-contained true --output ./publish
 
     - name: Setup Inno Setup
-      uses: Minionguyjpro/Inno-Setup-Action@v1
-      with:
-        version: latest
+      uses: Minionguyjpro/Inno-Setup-Action@v1.2
 
     - name: Compile Installer
       run: |
