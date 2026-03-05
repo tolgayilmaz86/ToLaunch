@@ -9,7 +9,7 @@
 		x:Class="ToLaunch.Views.MainWindow"
 		x:DataType="vm:MainWindowViewModel"
 		Icon="/Assets/ToLaunch.ico"
-		Width="800" Height="800"
+		Width="640" Height="720"
 		Title="{Binding WindowTitle}"
 		Background="#e0e0e0">
 
@@ -20,7 +20,7 @@
 	<Grid>
 		<!-- Main Content - Cards Grid (placed first so it renders behind the header) -->
 		<ScrollViewer>
-			<ItemsControl ItemsSource="{Binding AllCardsWithAddButton}" Margin="16,82,16,16">
+			<ItemsControl ItemsSource="{Binding AllCardsWithAddButton}" Margin="12,74,12,12">
 				<ItemsControl.ItemsPanel>
 					<ItemsPanelTemplate>
 						<WrapPanel Orientation="Horizontal"/>
@@ -33,11 +33,11 @@
 					</DataTemplate>
 					<!-- Template for Add Card Placeholder -->
 					<DataTemplate DataType="vm:AddCardPlaceholder">
-						<Grid Width="300" Height="150" Margin="30,30,30,30">
+						<Grid Width="280" Height="135" Margin="12,12,12,12">
 							<!-- Dashed border using Path -->
 							<Path Stroke="#999" StrokeThickness="3" StrokeDashArray="4,4">
 								<Path.Data>
-									<RectangleGeometry Rect="0,0,300,150" RadiusX="12" RadiusY="12"/>
+									<RectangleGeometry Rect="0,0,280,135" RadiusX="12" RadiusY="12"/>
 								</Path.Data>
 							</Path>
 
@@ -50,7 +50,7 @@
 								BorderBrush="White"
 								BorderThickness="2">
 									<controls:FloatingButton.Content>
-										<icons:MaterialIcon Kind="Add" Width="48" Height="48" Foreground="White" />
+										<icons:MaterialIcon Kind="Add" Width="42" Height="42" Foreground="White" />
 									</controls:FloatingButton.Content>
 								</controls:FloatingButton>
 							</Border>
@@ -61,24 +61,24 @@
 		</ScrollViewer>
 
 		<!-- Header (placed second so it renders on top, transparent background lets items scroll behind) -->
-		<Border VerticalAlignment="Top" Background="Transparent" Padding="8">
-		<StackPanel Spacing="8">
+		<Border VerticalAlignment="Top" Background="Transparent" Padding="6">
+		<StackPanel Spacing="6">
 		<!-- Top Row: Profile and Settings Buttons -->
-		<Border Height="50" CornerRadius="12" Background="Transparent">
-					<StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="16">
+		<Border Height="46" CornerRadius="12" Background="Transparent">
+					<StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="10">
 					<!-- Main Program Icon Button (Circle) -->
-					<Border CornerRadius="12" Margin="8,0,0,0" Padding="4" Background="Transparent">
+					<Border CornerRadius="12" Margin="4,0,0,0" Padding="3" Background="Transparent">
 						<controls:FloatingButton ToolTip.Tip="Select Main Program"
 												 Command="{Binding LoadProfileCommand}"
 												 Cursor="Hand"
 												 Background="LightBlue"
 												 BorderBrush="White"
 												 BorderThickness="2"
-												 Width="52"
-												 Height="52">
+												 Width="48"
+												 Height="48">
 							<controls:FloatingButton.Content>
-								<Border Width="48" Height="48"
-										CornerRadius="24"
+								<Border Width="44" Height="44"
+										CornerRadius="22"
 										ClipToBounds="True">
 									<Grid>
 										<!-- Show main program icon if available -->
@@ -87,7 +87,7 @@
 											   IsVisible="{Binding MainProgramIcon, Converter={x:Static ObjectConverters.IsNotNull}}"/>
 										<!-- Show rocket icon as fallback -->
 										<icons:MaterialIcon Kind="Rocket"
-															Width="32" Height="32"
+															Width="30" Height="30"
 															Foreground="White"
 															IsVisible="{Binding MainProgramIcon, Converter={x:Static ObjectConverters.IsNull}}"/>
 									</Grid>
@@ -96,10 +96,10 @@
 						</controls:FloatingButton>
 					</Border>
 					<!-- Profile Selection -->
-					<Border CornerRadius="12" Padding="8,-6,0,0" Background="Transparent">
+					<Border CornerRadius="12" Padding="6,-4,0,0" Background="Transparent">
 					<ComboBox Theme="{StaticResource ComboBoxOutset}"
-						Width="500"
-						Height="42"
+						Width="460"
+						Height="40"
 						CornerRadius="100"
 						HorizontalAlignment="Center"
 						PlaceholderText="Select or enter profile name"
@@ -119,11 +119,11 @@
 														Focusable="False"
 														Command="{Binding SaveProfileCommand}"
 														Margin="8,0,8,0"
-														Width="42"
-														Height="42"
+														Width="38"
+														Height="38"
 														ToolTip.Tip="Save current profile"
 														Cursor="Hand">
-													<icons:MaterialIcon Kind="ContentSave" Width="28" Height="28" Foreground="White" />
+													<icons:MaterialIcon Kind="ContentSave" Width="24" Height="24" Foreground="White" />
 												</Button>
 											</Template>
 										</Setter.Value>
@@ -135,17 +135,17 @@
 														Focusable="False"
 														Command="{Binding StartAllCommand}"
 														Margin="8,0,8,0"
-														Width="42"
-														Height="42"
+														Width="38"
+														Height="38"
 														ToolTip.Tip="{Binding StartStopButtonText}"
 														Cursor="Hand">
 													<Panel>
 														<!-- Stop icon when programs are running -->
-														<icons:MaterialIcon Kind="Stop" Width="28" Height="28" Foreground="White"
-																			IsVisible="{Binding AreAnyProgramsRunning}"/>
+														<icons:MaterialIcon Kind="Stop" Width="24" Height="24" Foreground="White"
+																				IsVisible="{Binding AreAnyProgramsRunning}"/>
 														<!-- Play icon when no programs are running -->
-														<icons:MaterialIcon Kind="Play" Width="28" Height="28" Foreground="White"
-																			IsVisible="{Binding !AreAnyProgramsRunning}"/>
+														<icons:MaterialIcon Kind="Play" Width="24" Height="24" Foreground="White"
+																				IsVisible="{Binding !AreAnyProgramsRunning}"/>
 													</Panel>
 												</Button>
 											</Template>
@@ -156,7 +156,7 @@
 						</ComboBox>
 					</Border>
 					<!-- Profile Settings Button -->
-					<Border CornerRadius="12" Margin="8,0,0,0" Padding="4" Background="Transparent">
+					<Border CornerRadius="12" Margin="4,0,0,0" Padding="3" Background="Transparent">
 						<controls:FloatingButton ToolTip.Tip="Application settings"
 												 Command="{Binding OpenApplicationSettingsCommand}"
 												 Cursor="Hand"
@@ -164,7 +164,7 @@
 												 BorderBrush="White"
 												 BorderThickness="2">
 							<controls:FloatingButton.Content>
-								<icons:MaterialIcon Kind="SettingsOutline" Width="24" Height="24" Foreground="White" />
+								<icons:MaterialIcon Kind="SettingsOutline" Width="22" Height="22" Foreground="White" />
 							</controls:FloatingButton.Content>
 						</controls:FloatingButton>
 					</Border>
