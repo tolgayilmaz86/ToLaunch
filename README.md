@@ -37,7 +37,9 @@ This program is inspired from iRacingManager (which is no longer maintained) tha
 *Main interface with program cards, profile selection, and control buttons*
 
 ### Program Settings
-![Program Settings](screenshots/ProgramSettings.png)
+![Program Settings](screenshots/ProgramSettings1.png)
+![Run Settings](screenshots/ProgramSettings2.png)
+![Advanced Settings](screenshots/ProgramSettings3.png)
 
 *Configure individual program settings, delays, and dependencies*
 
