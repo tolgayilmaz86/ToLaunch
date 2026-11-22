@@ -1,73 +1,50 @@
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
 using System.Diagnostics;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using ToLaunch.Models;
 using ToLaunch.ViewModels;
 
 namespace ToLaunch.Services;
-public class ProgramLaunchService
+
+/// <summary>
+/// Launches and terminates the programs configured on a launch card.
+/// </summary>
+/// <remarks>
+/// Stateless by design. Process ownership lives on the card that started the program, and discovery of
+/// externally started programs goes through <see cref="ProcessSnapshot"/>, which matches on the full
+/// executable path rather than the file name alone.
+/// </remarks>
+public static class ProgramLaunchService
 {
-    private readonly Dictionary<string, Process> _runningProcesses = [];
-
-    // P/Invoke declarations for setting process priority with proper access rights
-    private const uint PROCESS_SET_INFORMATION = 0x0200;
-    private const uint PROCESS_QUERY_INFORMATION = 0x0400;
-    private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, int dwProcessId);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool CloseHandle(IntPtr hObject);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetPriorityClass(IntPtr hProcess, uint dwPriorityClass);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern uint GetPriorityClass(IntPtr hProcess);
-
-    // Priority class constants
-    private const uint IDLE_PRIORITY_CLASS = 0x00000040;
-    private const uint BELOW_NORMAL_PRIORITY_CLASS = 0x00004000;
-    private const uint NORMAL_PRIORITY_CLASS = 0x00000020;
-    private const uint ABOVE_NORMAL_PRIORITY_CLASS = 0x00008000;
-    private const uint HIGH_PRIORITY_CLASS = 0x00000080;
-    private const uint REALTIME_PRIORITY_CLASS = 0x00000100;
-
-    public async Task StartProgramAsync(LaunchCardViewModel card)
+    /// <summary>
+    /// Starts the program configured on <paramref name="card"/>, honouring its start delay, hidden-start,
+    /// priority and CPU affinity settings.
+    /// </summary>
+    /// <returns>
+    /// The started process, or <c>null</c> when the program could not be started. A launcher-style
+    /// executable may exit immediately after spawning the real application, so a non-null result means
+    /// the launch succeeded, not that this particular process is still alive.
+    /// </returns>
+    public static async Task<Process?> StartProgramAsync(LaunchCardViewModel card)
     {
+        ArgumentNullException.ThrowIfNull(card);
+
         if (string.IsNullOrWhiteSpace(card.Path) || !System.IO.File.Exists(card.Path))
-            return;
-
-        // Check if the program is already running
-        if (IsProgramAlreadyRunning(card.Path))
         {
-            return;
+            LogService.LogWarning($"Cannot start {card.Name}: '{card.Path}' does not exist");
+            return null;
         }
 
-        // Check if should start with another program
-        if (card.StartWithProgram && !string.IsNullOrEmpty(card.StartWithProgramName))
-        {
-            // Wait for the dependent program to start
-            // TODO: track program state
-        }
-
-        // Apply start delay
         if (card.DelayStartSeconds > 0)
         {
-            await Task.Delay(card.DelayStartSeconds * 1000);
+            await Task.Delay(TimeSpan.FromSeconds(card.DelayStartSeconds));
         }
 
         try
         {
-            // If priority or affinity is set, we need to use UseShellExecute=false to get a proper process handle
-            // Otherwise, use UseShellExecute=true for better compatibility
+            // Priority and affinity need a real process handle, which requires UseShellExecute=false.
+            // Otherwise shell execution is preferred for compatibility.
             bool needsProcessControl = card.Priority != ProcessPriority.Default || card.CpuAffinity != 0;
 
             var startInfo = new ProcessStartInfo
@@ -78,55 +55,122 @@ public class ProgramLaunchService
                 WindowStyle = card.StartHidden ? ProcessWindowStyle.Hidden : ProcessWindowStyle.Normal
             };
 
-            // When not using shell execute, we need to set working directory
             if (needsProcessControl)
             {
-                startInfo.WorkingDirectory = System.IO.Path.GetDirectoryName(card.Path) ?? "";
+                startInfo.WorkingDirectory = System.IO.Path.GetDirectoryName(card.Path) ?? string.Empty;
             }
 
             var process = Process.Start(startInfo);
-            if (process != null)
+            if (process == null)
             {
-                _runningProcesses[card.Name] = process;
-                LogService.LogInfo($"Started process {card.Name} (PID: {process.Id})");
-
-                // Apply process settings (priority and affinity) with slight delay for launcher processes
-                if (needsProcessControl)
-                {
-                    _ = ApplyProcessSettingsAsync(process, card.Path, card.Priority, card.CpuAffinity, card.Name);
-                }
-
-                // If starting hidden, use Windows API to aggressively hide the window
-                if (card.StartHidden)
-                {
-                    _ = WindowHider.TryHideProcessWindowsAsync(process, maxAttempts: 10, delayBetweenAttempts: 300);
-                }
+                LogService.LogWarning($"Process.Start returned no process for {card.Name}");
+                return null;
             }
+
+            LogService.LogInfo($"Started process {card.Name} (PID: {process.Id})");
+
+            if (needsProcessControl)
+            {
+                _ = ApplyProcessSettingsAsync(process, card.Path, card.Priority, card.CpuAffinity, card.Name);
+            }
+
+            if (card.StartHidden)
+            {
+                _ = WindowHider.TryHideProcessWindowsAsync(process, maxAttempts: 10, delayBetweenAttempts: 300);
+            }
+
+            return process;
         }
         catch (Exception ex)
         {
             LogService.LogError($"Failed to start {card.Name}", ex);
+            return null;
         }
     }
 
     /// <summary>
-    /// Applies the configured process settings (priority and affinity) with a delay to handle launcher processes.
+    /// Stops the program configured on <paramref name="card"/>, honouring its stop delay.
+    /// </summary>
+    /// <param name="trackedProcess">
+    /// The process this card started, if still held. Killed first, since it is the one process we know
+    /// belongs to this card.
+    /// </param>
+    /// <returns>True when at least one process was terminated.</returns>
+    public static async Task<bool> StopProgramAsync(LaunchCardViewModel card, Process? trackedProcess)
+    {
+        ArgumentNullException.ThrowIfNull(card);
+
+        if (card.DelayStopSeconds > 0)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(card.DelayStopSeconds));
+        }
+
+        bool stopped = TryKill(trackedProcess, card.Name, "tracked");
+
+        // Also stop matching processes that we did not start ourselves (or that a launcher spawned).
+        // Matching is by full path, so a same-named program from another folder is left alone.
+        if (!string.IsNullOrWhiteSpace(card.Path))
+        {
+            try
+            {
+                using var snapshot = ProcessSnapshot.Capture([card.Path]);
+                foreach (var process in snapshot.Find(card.Path))
+                {
+                    stopped |= TryKill(process, card.Name, "matched by path");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogService.LogError($"Failed to look up processes to stop for {card.Name}", ex);
+            }
+        }
+
+        if (!stopped)
+        {
+            LogService.LogWarning($"No running process found to stop for {card.Name}");
+        }
+
+        return stopped;
+    }
+
+    private static bool TryKill(Process? process, string programName, string origin)
+    {
+        if (process == null)
+            return false;
+
+        try
+        {
+            if (process.HasExited)
+                return false;
+
+            int processId = process.Id;
+            process.Kill();
+            LogService.LogInfo($"Stopped {programName} ({origin}, PID: {processId})");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogService.LogError($"Failed to stop {programName} ({origin})", ex);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Applies priority and affinity after a short delay, giving launcher processes time to spawn the
+    /// application they front for.
     /// </summary>
     private static async Task ApplyProcessSettingsAsync(Process process, string programPath, ProcessPriority priority, long cpuAffinity, string programName)
     {
-        // Wait a moment for launcher processes to spawn the actual application
         await Task.Delay(500);
-        
-        // Apply affinity first (usually works)
+
+        // Affinity usually succeeds straight away; priority may need retrying.
         ApplyProcessAffinity(process, programPath, cpuAffinity, programName);
-        
-        // Apply priority with retry logic
         await ApplyProcessPriorityWithRetryAsync(process, programPath, priority, programName);
     }
 
     /// <summary>
-    /// Applies the configured process priority with retry logic.
-    /// Some applications reset their priority after startup, so we retry multiple times over a longer period.
+    /// Applies the configured process priority, retrying because some applications reset their own
+    /// priority shortly after startup. Stops as soon as the priority is verified as applied.
     /// </summary>
     private static async Task ApplyProcessPriorityWithRetryAsync(Process process, string programPath, ProcessPriority priority, string programName)
     {
@@ -140,71 +184,39 @@ public class ProgramLaunchService
             _ => ProcessPriorityClass.Normal
         };
 
-        // Try multiple times over a longer period (some apps reset priority after startup)
-        // Attempts: 0ms, 500ms, 1500ms, 3000ms, 5000ms, 8000ms, 12000ms, 17000ms (~17 seconds total)
-        int[] delays = [0, 500, 1000, 1500, 2000, 3000, 4000, 5000];
-        
-        for (int attempt = 0; attempt < delays.Length; attempt++)
+        // Waits before each attempt after the first; ~17s in total if every attempt fails.
+        int[] delaysMs = [0, 500, 1000, 1500, 2000, 3000, 4000, 5000];
+
+        for (int attempt = 0; attempt < delaysMs.Length; attempt++)
         {
             if (attempt > 0)
-                await Task.Delay(delays[attempt]);
+                await Task.Delay(delaysMs[attempt]);
 
-            // Try to set on the original process first
-            bool success = TrySetAndVerifyProcessPriority(process, targetPriority, programName);
-            
-            // If that failed, try to find the process by name
-            if (!success)
-                success = TrySetAndVerifyProcessPriorityByName(programPath, targetPriority, programName);
+            // Try the process we started, then any process matching the configured path.
+            bool success = TrySetAndVerifyProcessPriority(process, targetPriority, programName)
+                        || TrySetAndVerifyProcessPriorityByPath(programPath, targetPriority, programName);
 
-            if (success && attempt > 0)
+            if (success)
             {
-                LogService.LogInfo($"Priority for {programName} set successfully on attempt {attempt + 1}");
+                if (attempt > 0)
+                    LogService.LogInfo($"Priority for {programName} set successfully on attempt {attempt + 1}");
+                return;
             }
         }
+
+        LogService.LogWarning($"Gave up setting priority for {programName} after {delaysMs.Length} attempts");
     }
 
     /// <summary>
-    /// Tries to set the priority on a specific process using native Windows API for proper access rights.
-    /// </summary>
-    private static bool TrySetProcessPriority(Process process, ProcessPriorityClass targetPriority, string programName)
-    {
-        try
-        {
-            process.Refresh();
-            
-            if (process.HasExited)
-                return false;
-
-            int processId = process.Id;
-            return TrySetProcessPriorityById(processId, targetPriority, programName);
-        }
-        catch (ArgumentException)
-        {
-            // Process no longer exists
-            return false;
-        }
-        catch (InvalidOperationException)
-        {
-            // Process has exited
-            return false;
-        }
-        catch (Exception ex)
-        {
-            LogService.LogError($"Failed to set process priority for {programName}", ex);
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Tries to set and verify the priority on a specific process.
-    /// Returns true only if the priority was set AND verified.
+    /// Sets and verifies the priority on a specific process.
+    /// Returns true only if the priority was set AND read back as the target value.
     /// </summary>
     private static bool TrySetAndVerifyProcessPriority(Process process, ProcessPriorityClass targetPriority, string programName)
     {
         try
         {
             process.Refresh();
-            
+
             if (process.HasExited)
                 return false;
 
@@ -212,10 +224,12 @@ public class ProgramLaunchService
         }
         catch (ArgumentException)
         {
+            // Process no longer exists.
             return false;
         }
         catch (InvalidOperationException)
         {
+            // Process has exited.
             return false;
         }
         catch (Exception ex)
@@ -226,36 +240,31 @@ public class ProgramLaunchService
     }
 
     /// <summary>
-    /// Tries to set and verify process priority by finding the process by name.
+    /// Sets and verifies the priority on every process matching <paramref name="programPath"/>.
+    /// Used when the process we started was a launcher that has already exited.
     /// </summary>
-    private static bool TrySetAndVerifyProcessPriorityByName(string programPath, ProcessPriorityClass targetPriority, string programName)
+    private static bool TrySetAndVerifyProcessPriorityByPath(string programPath, ProcessPriorityClass targetPriority, string programName)
     {
         try
         {
-            var processName = System.IO.Path.GetFileNameWithoutExtension(programPath);
-            var processes = Process.GetProcessesByName(processName);
-            bool allSuccess = processes.Length > 0;
+            using var snapshot = ProcessSnapshot.Capture([programPath]);
+            var processes = snapshot.Find(programPath);
 
-            foreach (var proc in processes)
+            if (processes.Count == 0)
+                return false;
+
+            bool allSuccess = true;
+            foreach (var process in processes)
             {
                 try
                 {
-                    if (!proc.HasExited)
-                    {
-                        if (!TrySetAndVerifyProcessPriorityById(proc.Id, targetPriority, programName))
-                        {
-                            allSuccess = false;
-                        }
-                    }
+                    if (!process.HasExited && !TrySetAndVerifyProcessPriorityById(process.Id, targetPriority, programName))
+                        allSuccess = false;
                 }
                 catch (Exception ex)
                 {
-                    LogService.LogError($"Failed to set priority for PID {proc.Id}", ex);
+                    LogService.LogError($"Failed to set priority for {programName}", ex);
                     allSuccess = false;
-                }
-                finally
-                {
-                    proc.Dispose();
                 }
             }
 
@@ -263,52 +272,42 @@ public class ProgramLaunchService
         }
         catch (Exception ex)
         {
-            LogService.LogError($"Failed to find process by name for {programName}", ex);
+            LogService.LogError($"Failed to find processes by path for {programName}", ex);
             return false;
         }
     }
 
     /// <summary>
-    /// Tries to set the priority and then verifies it was actually applied.
+    /// Sets the priority via the native API (so the handle carries the right access rights), then reads
+    /// it back to confirm the application did not immediately override it.
     /// </summary>
     private static bool TrySetAndVerifyProcessPriorityById(int processId, ProcessPriorityClass targetPriority, string programName)
     {
-        IntPtr hProcess = OpenProcess(PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION, false, processId);
-        
+        IntPtr hProcess = NativeMethods.OpenProcess(
+            NativeMethods.PROCESS_SET_INFORMATION | NativeMethods.PROCESS_QUERY_LIMITED_INFORMATION,
+            false,
+            processId);
+
         if (hProcess == IntPtr.Zero)
         {
-            int error = Marshal.GetLastWin32Error();
-            LogService.LogError($"Failed to open process {programName} (PID: {processId}) for priority change. Error code: {error}");
+            LogService.LogWarning($"Could not open process {programName} (PID: {processId}) to change priority. Error code: {Marshal.GetLastWin32Error()}");
             return false;
         }
 
         try
         {
-            uint targetPriorityClass = targetPriority switch
-            {
-                ProcessPriorityClass.Idle => IDLE_PRIORITY_CLASS,
-                ProcessPriorityClass.BelowNormal => BELOW_NORMAL_PRIORITY_CLASS,
-                ProcessPriorityClass.Normal => NORMAL_PRIORITY_CLASS,
-                ProcessPriorityClass.AboveNormal => ABOVE_NORMAL_PRIORITY_CLASS,
-                ProcessPriorityClass.High => HIGH_PRIORITY_CLASS,
-                ProcessPriorityClass.RealTime => REALTIME_PRIORITY_CLASS,
-                _ => NORMAL_PRIORITY_CLASS
-            };
+            uint targetPriorityClass = ToPriorityClass(targetPriority);
 
-            // Set the priority
-            if (!SetPriorityClass(hProcess, targetPriorityClass))
+            if (!NativeMethods.SetPriorityClass(hProcess, targetPriorityClass))
             {
-                int error = Marshal.GetLastWin32Error();
-                LogService.LogError($"SetPriorityClass failed for {programName} (PID: {processId}). Error code: {error}");
+                LogService.LogWarning($"SetPriorityClass failed for {programName} (PID: {processId}). Error code: {Marshal.GetLastWin32Error()}");
                 return false;
             }
 
-            // Verify the priority was actually set
-            uint actualPriority = GetPriorityClass(hProcess);
+            uint actualPriority = NativeMethods.GetPriorityClass(hProcess);
             if (actualPriority == 0)
             {
-                int error = Marshal.GetLastWin32Error();
-                LogService.LogError($"GetPriorityClass failed for {programName} (PID: {processId}). Error code: {error}");
+                LogService.LogWarning($"GetPriorityClass failed for {programName} (PID: {processId}). Error code: {Marshal.GetLastWin32Error()}");
                 return false;
             }
 
@@ -317,126 +316,41 @@ public class ProgramLaunchService
                 LogService.LogInfo($"Set and verified process priority for {programName} (PID: {processId}) to {targetPriority}");
                 return true;
             }
-            else
-            {
-                string actualName = GetPriorityClassName(actualPriority);
-                LogService.LogWarning($"Priority for {programName} (PID: {processId}) was set but changed back to {actualName}. App may be resetting its own priority.");
-                return false;
-            }
+
+            LogService.LogWarning($"Priority for {programName} (PID: {processId}) was set but changed back to {GetPriorityClassName(actualPriority)}. App may be resetting its own priority.");
+            return false;
         }
         finally
         {
-            CloseHandle(hProcess);
+            NativeMethods.CloseHandle(hProcess);
         }
     }
 
-    /// <summary>
-    /// Gets a human-readable name for a priority class constant.
-    /// </summary>
-    private static string GetPriorityClassName(uint priorityClass)
+    private static uint ToPriorityClass(ProcessPriorityClass priority) => priority switch
     {
-        return priorityClass switch
-        {
-            IDLE_PRIORITY_CLASS => "Idle",
-            BELOW_NORMAL_PRIORITY_CLASS => "BelowNormal",
-            NORMAL_PRIORITY_CLASS => "Normal",
-            ABOVE_NORMAL_PRIORITY_CLASS => "AboveNormal",
-            HIGH_PRIORITY_CLASS => "High",
-            REALTIME_PRIORITY_CLASS => "RealTime",
-            _ => $"Unknown (0x{priorityClass:X})"
-        };
-    }
+        ProcessPriorityClass.Idle => NativeMethods.IDLE_PRIORITY_CLASS,
+        ProcessPriorityClass.BelowNormal => NativeMethods.BELOW_NORMAL_PRIORITY_CLASS,
+        ProcessPriorityClass.Normal => NativeMethods.NORMAL_PRIORITY_CLASS,
+        ProcessPriorityClass.AboveNormal => NativeMethods.ABOVE_NORMAL_PRIORITY_CLASS,
+        ProcessPriorityClass.High => NativeMethods.HIGH_PRIORITY_CLASS,
+        ProcessPriorityClass.RealTime => NativeMethods.REALTIME_PRIORITY_CLASS,
+        _ => NativeMethods.NORMAL_PRIORITY_CLASS
+    };
 
-    /// <summary>
-    /// Tries to set the priority on a process by ID using native Windows API.
-    /// </summary>
-    private static bool TrySetProcessPriorityById(int processId, ProcessPriorityClass targetPriority, string programName)
+    private static string GetPriorityClassName(uint priorityClass) => priorityClass switch
     {
-        // Open the process with SET_INFORMATION access right
-        IntPtr hProcess = OpenProcess(PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION, false, processId);
-        
-        if (hProcess == IntPtr.Zero)
-        {
-            int error = Marshal.GetLastWin32Error();
-            LogService.LogError($"Failed to open process {programName} (PID: {processId}) for priority change. Error code: {error}");
-            return false;
-        }
-
-        try
-        {
-            uint priorityClass = targetPriority switch
-            {
-                ProcessPriorityClass.Idle => IDLE_PRIORITY_CLASS,
-                ProcessPriorityClass.BelowNormal => BELOW_NORMAL_PRIORITY_CLASS,
-                ProcessPriorityClass.Normal => NORMAL_PRIORITY_CLASS,
-                ProcessPriorityClass.AboveNormal => ABOVE_NORMAL_PRIORITY_CLASS,
-                ProcessPriorityClass.High => HIGH_PRIORITY_CLASS,
-                ProcessPriorityClass.RealTime => REALTIME_PRIORITY_CLASS,
-                _ => NORMAL_PRIORITY_CLASS
-            };
-
-            if (SetPriorityClass(hProcess, priorityClass))
-            {
-                LogService.LogInfo($"Set process priority for {programName} (PID: {processId}) to {targetPriority}");
-                return true;
-            }
-            else
-            {
-                int error = Marshal.GetLastWin32Error();
-                LogService.LogError($"SetPriorityClass failed for {programName} (PID: {processId}). Error code: {error}");
-                return false;
-            }
-        }
-        finally
-        {
-            CloseHandle(hProcess);
-        }
-    }
+        NativeMethods.IDLE_PRIORITY_CLASS => "Idle",
+        NativeMethods.BELOW_NORMAL_PRIORITY_CLASS => "BelowNormal",
+        NativeMethods.NORMAL_PRIORITY_CLASS => "Normal",
+        NativeMethods.ABOVE_NORMAL_PRIORITY_CLASS => "AboveNormal",
+        NativeMethods.HIGH_PRIORITY_CLASS => "High",
+        NativeMethods.REALTIME_PRIORITY_CLASS => "RealTime",
+        _ => $"Unknown (0x{priorityClass:X})"
+    };
 
     /// <summary>
-    /// Tries to set process priority by finding the process by name using native Windows API.
-    /// </summary>
-    private static bool TrySetProcessPriorityByName(string programPath, ProcessPriorityClass targetPriority, string programName)
-    {
-        try
-        {
-            var processName = System.IO.Path.GetFileNameWithoutExtension(programPath);
-            var processes = Process.GetProcessesByName(processName);
-            bool anySuccess = false;
-
-            foreach (var proc in processes)
-            {
-                try
-                {
-                    if (!proc.HasExited)
-                    {
-                        if (TrySetProcessPriorityById(proc.Id, targetPriority, programName))
-                        {
-                            anySuccess = true;
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    LogService.LogError($"Failed to set priority for PID {proc.Id}", ex);
-                }
-                finally
-                {
-                    proc.Dispose();
-                }
-            }
-
-            return anySuccess;
-        }
-        catch (Exception ex)
-        {
-            LogService.LogError($"Failed to find process by name for {programName}", ex);
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Applies the configured CPU affinity to the given process.
+    /// Applies the configured CPU affinity, falling back to processes matching the configured path when
+    /// the process we started has already exited.
     /// </summary>
     private static void ApplyProcessAffinity(Process process, string programPath, long cpuAffinity, string programName)
     {
@@ -445,7 +359,6 @@ public class ProgramLaunchService
 
         try
         {
-            // First try to set affinity on the process we started
             if (!process.HasExited)
             {
                 process.ProcessorAffinity = (IntPtr)cpuAffinity;
@@ -455,179 +368,35 @@ public class ProgramLaunchService
         }
         catch (InvalidOperationException)
         {
-            // Process has exited, fall through to find by name
+            // Process has exited; fall through to matching by path.
         }
         catch (Exception ex)
         {
             LogService.LogError($"Failed to set CPU affinity for {programName}", ex);
         }
 
-        // If the original process exited (e.g., it was a launcher), find the actual process by name
         try
         {
-            var processName = System.IO.Path.GetFileNameWithoutExtension(programPath);
-            var processes = Process.GetProcessesByName(processName);
-            foreach (var proc in processes)
+            using var snapshot = ProcessSnapshot.Capture([programPath]);
+            foreach (var match in snapshot.Find(programPath))
             {
                 try
                 {
-                    if (!proc.HasExited)
+                    if (!match.HasExited)
                     {
-                        proc.ProcessorAffinity = (IntPtr)cpuAffinity;
-                        LogService.LogInfo($"Set CPU affinity for {programName} (found by name, PID: {proc.Id}) to 0x{cpuAffinity:X}");
+                        match.ProcessorAffinity = (IntPtr)cpuAffinity;
+                        LogService.LogInfo($"Set CPU affinity for {programName} (PID: {match.Id}) to 0x{cpuAffinity:X}");
                     }
                 }
                 catch (Exception ex)
                 {
-                    LogService.LogError($"Failed to set affinity for PID {proc.Id}", ex);
-                }
-                finally
-                {
-                    proc.Dispose();
+                    LogService.LogError($"Failed to set affinity for {programName}", ex);
                 }
             }
         }
         catch (Exception ex)
         {
-            LogService.LogError($"Failed to find process by name for affinity {programName}", ex);
-        }
-    }
-
-    public async Task StopProgramAsync(LaunchCardViewModel card)
-    {
-        // Apply stop delay
-        if (card.DelayStopSeconds > 0)
-        {
-            await Task.Delay(card.DelayStopSeconds * 1000);
-        }
-
-        bool stopped = false;
-
-        // First try to stop the tracked process
-        if (_runningProcesses.TryGetValue(card.Name, out var process))
-        {
-            try
-            {
-                if (!process.HasExited)
-                {
-                    process.Kill();
-                    LogService.LogInfo($"Stopped tracked process {card.Name}");
-                    stopped = true;
-                }
-                process.Dispose();
-                _runningProcesses.Remove(card.Name);
-            }
-            catch (Exception ex)
-            {
-                LogService.LogError($"Failed to stop tracked process {card.Name}", ex);
-            }
-        }
-
-        // Also try to find and kill by process name (handles externally started processes)
-        if (!string.IsNullOrWhiteSpace(card.Path))
-        {
-            try
-            {
-                var processName = System.IO.Path.GetFileNameWithoutExtension(card.Path);
-                var processes = Process.GetProcessesByName(processName);
-                
-                foreach (var proc in processes)
-                {
-                    try
-                    {
-                        if (!proc.HasExited)
-                        {
-                            proc.Kill();
-                            LogService.LogInfo($"Stopped process {card.Name} (found by name, PID: {proc.Id})");
-                            stopped = true;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        LogService.LogError($"Failed to stop process PID {proc.Id}", ex);
-                    }
-                    finally
-                    {
-                        proc.Dispose();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                LogService.LogError($"Failed to find process by name for {card.Name}", ex);
-            }
-        }
-
-        if (!stopped)
-        {
-            LogService.LogWarning($"No running process found to stop for {card.Name}");
-        }
-    }
-
-    public bool IsProgramRunning(string programName)
-    {
-        return _runningProcesses.ContainsKey(programName) &&
-               !_runningProcesses[programName].HasExited;
-    }
-
-    /// <summary>
-    /// Checks if a program is already running by looking for processes with matching name.
-    /// This is useful for checking programs that may have been started externally.
-    /// </summary>
-    public static bool IsProgramAlreadyRunning(string programPath, Process[] allProcesses)
-    {
-        if (string.IsNullOrWhiteSpace(programPath))
-            return false;
-
-        try
-        {
-            var processName = System.IO.Path.GetFileNameWithoutExtension(programPath);
-            var isRunning = allProcesses.Any(p =>
-            {
-                try
-                {
-                    return p.ProcessName.Equals(processName, StringComparison.OrdinalIgnoreCase);
-                }
-                catch
-                {
-                    return false;
-                }
-            });
-
-            return isRunning;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Checks if a program is already running by looking for processes with matching name.
-    /// This is useful for checking programs that may have been started externally.
-    /// </summary>
-    public static bool IsProgramAlreadyRunning(string programPath)
-    {
-        if (string.IsNullOrWhiteSpace(programPath))
-            return false;
-
-        try
-        {
-            var processName = System.IO.Path.GetFileNameWithoutExtension(programPath);
-            var processes = Process.GetProcessesByName(processName);
-            var isRunning = processes.Length > 0;
-
-            // Dispose the process objects to avoid resource leaks
-            foreach (var proc in processes)
-            {
-                proc.Dispose();
-            }
-
-            return isRunning;
-        }
-        catch
-        {
-            return false;
+            LogService.LogError($"Failed to find processes by path for affinity {programName}", ex);
         }
     }
 }

@@ -1,8 +1,5 @@
-﻿using System;
-using System.IO;
-using System.Text.Json;
+using System;
 using Avalonia;
-using ToLaunch.Models;
 using ToLaunch.Services;
 
 namespace ToLaunch;
@@ -20,13 +17,16 @@ internal sealed class Program
         // Check if the app should run as administrator on startup
         if (ShouldRestartAsAdmin())
         {
-            if (AdminHelper.RestartAsAdministrator())
+            if (AdminHelper.RestartAsAdministrator(args))
             {
                 // Successfully started elevated process, exit this one
                 return;
             }
             // If restart failed or was cancelled, continue running without elevation
         }
+
+        // App reads these to tell a Windows-startup launch from a manual one.
+        App.StartupArgs = args;
 
         try
         {
@@ -45,30 +45,7 @@ internal sealed class Program
         if (AdminHelper.IsRunningAsAdministrator())
             return false;
 
-        // Check settings file for RunAsAdministrator preference
-        try
-        {
-            var settingsPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "ToLaunch", "settings.json");
-
-            if (File.Exists(settingsPath))
-            {
-                var json = File.ReadAllText(settingsPath);
-                var settings = JsonSerializer.Deserialize<AppSettings>(json, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
-
-                return settings?.RunAsAdministrator == true;
-            }
-        }
-        catch
-        {
-            // If we can't read settings, don't try to elevate
-        }
-
-        return false;
+        return SettingsService.Load().RunAsAdministrator;
     }
 
     // Avalonia configuration, don't remove; also used by visual designer.

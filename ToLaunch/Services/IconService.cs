@@ -10,14 +10,8 @@ public class IconService
 
     public IconService()
     {
-        _iconCacheDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ToLaunch", "Icons");
-
-        if (!Directory.Exists(_iconCacheDirectory))
-        {
-            Directory.CreateDirectory(_iconCacheDirectory);
-        }
+        _iconCacheDirectory = SettingsService.IconCacheFolder;
+        Directory.CreateDirectory(_iconCacheDirectory);
     }
 
     public async Task<string?> ExtractIconAsync(string executablePath)
@@ -51,11 +45,11 @@ public class IconService
 
     private static string? ExtractIconWindows(string executablePath, string outputPath)
     {
+        IntPtr[] largeIcons = new IntPtr[1];
+        IntPtr[] smallIcons = new IntPtr[1];
+
         try
         {
-            IntPtr[] largeIcons = new IntPtr[1];
-            IntPtr[] smallIcons = new IntPtr[1];
-
             // Extract both large and small icons
             int iconCount = ExtractIconEx(executablePath, 0, largeIcons, smallIcons, 1);
 
@@ -75,16 +69,18 @@ public class IconService
                 bitmap.Save(outputPath, System.Drawing.Imaging.ImageFormat.Png);
             }
 
-            // Clean up icon handles
-            if (largeIcons[0] != IntPtr.Zero) DestroyIcon(largeIcons[0]);
-            if (smallIcons[0] != IntPtr.Zero) DestroyIcon(smallIcons[0]);
-
             return outputPath;
         }
         catch (Exception ex)
         {
             LogService.LogError($"Failed to extract icon from executable: {ex.Message}");
             return null;
+        }
+        finally
+        {
+            // Must run even if saving threw, or the icon handles leak.
+            if (largeIcons[0] != IntPtr.Zero) DestroyIcon(largeIcons[0]);
+            if (smallIcons[0] != IntPtr.Zero) DestroyIcon(smallIcons[0]);
         }
     }
 

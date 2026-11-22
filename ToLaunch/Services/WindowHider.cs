@@ -12,22 +12,16 @@ namespace ToLaunch.Services;
 public static class WindowHider
 {
     private const int SW_HIDE = 0;
-    private const int SW_MINIMIZE = 6;
-    private const int SW_SHOWMINNOACTIVE = 7;
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool IsWindowVisible(IntPtr hWnd);
-
     /// <summary>
-    /// Attempts to hide all windows belonging to a process.
+    /// Attempts to hide the main window of a process, retrying until one appears.
     /// This is more aggressive than ProcessWindowStyle.Hidden.
     /// </summary>
-    /// <param name="process">The process whose windows should be hidden</param>
+    /// <param name="process">The process whose window should be hidden</param>
     /// <param name="maxAttempts">Maximum number of attempts (some apps create windows after startup)</param>
     /// <param name="delayBetweenAttempts">Delay between attempts in milliseconds</param>
     public static async Task TryHideProcessWindowsAsync(Process? process, int maxAttempts = 5, int delayBetweenAttempts = 500)
@@ -48,73 +42,22 @@ public static class WindowHider
                 // Refresh to get the latest window handle
                 process.Refresh();
 
-                // Try to hide the main window
-                if (process.MainWindowHandle != IntPtr.Zero)
-                {
-                    ShowWindow(process.MainWindowHandle, SW_HIDE);
-                    LogService.LogInfo($"Hidden window for process {process.ProcessName} (attempt {attempt + 1})");
-                }
+                // Keep waiting until the process actually has a window to hide.
+                if (process.MainWindowHandle == IntPtr.Zero)
+                    continue;
+
+                // ShowWindow's result is the window's previous visibility, not a success flag, so it is
+                // not worth testing: a non-zero handle means the window exists and has been acted on.
+                ShowWindow(process.MainWindowHandle, SW_HIDE);
+                LogService.LogInfo($"Hidden window for process {process.ProcessName} (attempt {attempt + 1})");
+
+                // Stop here; retrying would also re-hide a window the user deliberately restored.
+                return;
             }
             catch (Exception ex)
             {
                 LogService.LogError($"Error hiding window (attempt {attempt + 1}): {ex.Message}");
             }
-        }
-    }
-
-    /// <summary>
-    /// Attempts to minimize all windows belonging to a process.
-    /// This is an alternative to hiding that more applications respect.
-    /// </summary>
-    /// <param name="process">The process whose windows should be minimized</param>
-    public static async Task TryMinimizeProcessWindowsAsync(Process? process, int maxAttempts = 3, int delayBetweenAttempts = 500)
-    {
-        if (process == null || process.HasExited)
-            return;
-
-        for (int attempt = 0; attempt < maxAttempts; attempt++)
-        {
-            try
-            {
-                await Task.Delay(delayBetweenAttempts);
-
-                if (process.HasExited)
-                    return;
-
-                process.Refresh();
-
-                if (process.MainWindowHandle != IntPtr.Zero)
-                {
-                    ShowWindow(process.MainWindowHandle, SW_SHOWMINNOACTIVE);
-                    LogService.LogInfo($"Minimized window for process {process.ProcessName} (attempt {attempt + 1})");
-                }
-            }
-            catch (Exception ex)
-            {
-                LogService.LogError($"Error minimizing window (attempt {attempt + 1}): {ex.Message}");
-            }
-        }
-    }
-
-    /// <summary>
-    /// Hides a specific window handle.
-    /// </summary>
-    public static void HideWindow(IntPtr hWnd)
-    {
-        if (hWnd != IntPtr.Zero)
-        {
-            ShowWindow(hWnd, SW_HIDE);
-        }
-    }
-
-    /// <summary>
-    /// Minimizes a specific window handle without activating it.
-    /// </summary>
-    public static void MinimizeWindow(IntPtr hWnd)
-    {
-        if (hWnd != IntPtr.Zero)
-        {
-            ShowWindow(hWnd, SW_SHOWMINNOACTIVE);
         }
     }
 }

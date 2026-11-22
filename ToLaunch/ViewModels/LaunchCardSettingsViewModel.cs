@@ -78,9 +78,6 @@ public partial class LaunchCardSettingsViewModel : ViewModelBase
     private int delayStopSeconds;
 
     [ObservableProperty]
-    private bool useApplicationIcon = true;
-
-    [ObservableProperty]
     private bool isNewProgram = true;
 
     // Priority settings - using separate bools for radio button binding
@@ -98,8 +95,6 @@ public partial class LaunchCardSettingsViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool useAllCores = true;
-
-    public int CpuCoreCount => Environment.ProcessorCount;
 
     public ObservableCollection<string> AvailablePrograms { get; } = new();
 
@@ -256,12 +251,12 @@ public partial class LaunchCardSettingsViewModel : ViewModelBase
             }
         }
 
-        // If all cores are selected, return 0 (default)
-        if (affinity == ((1L << CpuCores.Count) - 1))
-            return 0;
+        // No cores selected, or all of them: either way that is the default (0 = use all cores).
+        // Note the 64-core case has to be special-cased, because C# masks shift counts to 63 and
+        // `1L << 64` would otherwise evaluate to 1.
+        long allCoresMask = CpuCores.Count >= 64 ? -1L : (1L << CpuCores.Count) - 1;
 
-        // If no cores are selected, return 0 (use all)
-        if (affinity == 0)
+        if (affinity == 0 || affinity == allCoresMask)
             return 0;
 
         return affinity;

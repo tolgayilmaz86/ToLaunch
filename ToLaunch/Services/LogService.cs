@@ -101,14 +101,6 @@ public static class LogService
         }
     }
 
-    /// <summary>
-    /// Logs a debug message.
-    /// </summary>
-    public static void LogDebug(string message)
-    {
-        WriteLog("DEBUG", message);
-    }
-
     private static void WriteLog(string level, string message)
     {
         try
@@ -120,8 +112,8 @@ public static class LogService
                 File.AppendAllText(_logFilePath, logLine + Environment.NewLine);
             }
 
-            // Also write to debug output
-            Debug.WriteLine(logLine);
+            // Deliberately no Debug.WriteLine here: Debug and Trace share Trace.Listeners, which holds
+            // the LogTraceListener pointing at this same file, so it would write every line twice.
         }
         catch
         {

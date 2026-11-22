@@ -30,14 +30,19 @@ public static class AdminHelper
     /// Restarts the current application with administrator privileges.
     /// Returns true if the restart was initiated, false if it failed or was cancelled.
     /// </summary>
-    public static bool RestartAsAdministrator()
+    /// <param name="arguments">
+    /// Arguments to forward to the elevated instance, so flags such as <c>--startup</c> survive the
+    /// restart.
+    /// </param>
+    public static bool RestartAsAdministrator(params string[] arguments)
     {
         try
         {
             var exePath = Environment.ProcessPath;
             if (string.IsNullOrEmpty(exePath))
             {
-                exePath = Process.GetCurrentProcess().MainModule?.FileName;
+                using var current = Process.GetCurrentProcess();
+                exePath = current.MainModule?.FileName;
             }
 
             if (string.IsNullOrEmpty(exePath))
@@ -53,7 +58,12 @@ public static class AdminHelper
                 Verb = "runas"
             };
 
-            Process.Start(startInfo);
+            foreach (var argument in arguments)
+            {
+                startInfo.ArgumentList.Add(argument);
+            }
+
+            Process.Start(startInfo)?.Dispose();
             return true;
         }
         catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)

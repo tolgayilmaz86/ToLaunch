@@ -8,13 +8,22 @@ using System.IO;
 using Material.Icons;
 using System.Threading.Tasks;
 using Avalonia.Media;
-using System.Collections.Generic;
 using System.Diagnostics;
 
 namespace ToLaunch.ViewModels;
-public partial class LaunchCardViewModel : ObservableObject
+public partial class LaunchCardViewModel : ObservableObject, IDisposable
 {
-    private readonly ProgramLaunchService _launchService = new();
+    /// <summary>
+    /// Extra time beyond the configured start delay during which a program is still considered
+    /// "starting". Prevents the process monitor from contradicting a launch that has not appeared in
+    /// the process table yet, which would otherwise flip the button back and re-trigger the launch.
+    /// </summary>
+    private static readonly TimeSpan LaunchGracePeriod = TimeSpan.FromSeconds(5);
+
+    /// <summary>The process this card started, if it is still alive and owned by us.</summary>
+    private Process? _startedProcess;
+
+    private DateTime _launchPendingUntil = DateTime.MinValue;
 
     [ObservableProperty]
     private string name = "New Program";
@@ -71,8 +80,16 @@ public partial class LaunchCardViewModel : ObservableObject
 
     public IBrush ButtonBackground => IsRunning ? new SolidColorBrush(Colors.LightCoral) : new SolidColorBrush(Colors.LightBlue);
 
+    /// <summary>
+    /// The card's running state as of the previous monitor tick, used to detect the transitions that
+    /// drive the start-with / stop-with dependencies.
+    /// </summary>
+    internal bool PreviousIsRunning { get; set; }
+
+    /// <summary>True while a start is in flight and the process has not been observed yet.</summary>
+    internal bool IsLaunchPending => DateTime.UtcNow < _launchPendingUntil;
+
     public Action<LaunchCardViewModel>? OnSettingsRequested { get; set; }
-    public Action<LaunchCardViewModel>? OnDeleteRequested { get; set; }
     public Action? OnProgramChanged { get; set; }
 
     public LaunchCardViewModel()
@@ -102,8 +119,6 @@ public partial class LaunchCardViewModel : ObservableObject
         DelayStopSeconds = model.DelayStopSeconds;
         Priority = model.Priority;
         CpuAffinity = model.CpuAffinity;
-
-        UpdateRunningStatus();
     }
 
     public void LoadIconBitmap(string iconFilePath)
@@ -116,27 +131,25 @@ public partial class LaunchCardViewModel : ObservableObject
             }
             else
             {
-                // Load default cmd-icon.ico from assets
-                var assets = Avalonia.Platform.AssetLoader.Open(new Uri("avares://ToLaunch/Assets/cmd-icon.ico"));
-                IconBitmap = new Bitmap(assets);
+                IconBitmap = LoadDefaultIcon();
             }
         }
         catch
         {
-            try
-            {
-                // Fallback to default icon on error
-                var assets = Avalonia.Platform.AssetLoader.Open(new Uri("avares://ToLaunch/Assets/cmd-icon.ico"));
-                IconBitmap = new Bitmap(assets);
-            }
-            catch
-            {
-                IconBitmap = null;
-            }
+            IconBitmap = LoadDefaultIcon();
         }
-        finally
+    }
+
+    private static Bitmap? LoadDefaultIcon()
+    {
+        try
         {
-            OnPropertyChanged(nameof(IconBitmap));
+            using var asset = Avalonia.Platform.AssetLoader.Open(new Uri("avares://ToLaunch/Assets/cmd-icon.ico"));
+            return new Bitmap(asset);
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -162,21 +175,16 @@ public partial class LaunchCardViewModel : ObservableObject
         };
     }
 
+    /// <summary>
+    /// The card's play/stop button: stops the program when it is running, starts it otherwise.
+    /// </summary>
     [RelayCommand]
     private async Task Start()
     {
-        // Check both the IsRunning flag AND if the process is actually running
-        bool actuallyRunning = !string.IsNullOrWhiteSpace(Path) && 
-                               ProgramLaunchService.IsProgramAlreadyRunning(Path);
-        
-        if (IsRunning || actuallyRunning)
-        {
-            await StopProgramAsync();
-        }
+        if (IsRunning)
+            await StopAsync();
         else
-        {
-            await StartProgramAsync();
-        }
+            await StartAsync();
     }
 
     [RelayCommand]
@@ -185,26 +193,98 @@ public partial class LaunchCardViewModel : ObservableObject
         OnSettingsRequested?.Invoke(this);
     }
 
-    private async Task StartProgramAsync()
+    /// <summary>
+    /// Starts the program. Does nothing if it is already running or a start is already in flight.
+    /// <see cref="IsRunning"/> is only set when the launch actually succeeded.
+    /// </summary>
+    public async Task StartAsync()
     {
-        if (string.IsNullOrWhiteSpace(Path) || !File.Exists(Path))
+        if (IsRunning || IsLaunchPending)
             return;
 
-        // Check if program is already running
-        if (_launchService.IsProgramRunning(Name))
+        // Hold the "starting" state across the configured delay plus a grace period, so the monitor
+        // does not contradict us before the process shows up in the process table.
+        _launchPendingUntil = DateTime.UtcNow + TimeSpan.FromSeconds(DelayStartSeconds) + LaunchGracePeriod;
+
+        try
         {
+            var process = await ProgramLaunchService.StartProgramAsync(this);
+
+            if (process == null)
+            {
+                // Launch failed; drop the pending window so the button returns to Play immediately.
+                _launchPendingUntil = DateTime.MinValue;
+                IsRunning = false;
+                return;
+            }
+
+            ReplaceStartedProcess(process);
+            IsRunning = true;
+        }
+        catch (Exception ex)
+        {
+            _launchPendingUntil = DateTime.MinValue;
+            IsRunning = false;
+            LogService.LogError($"Failed to start {Name}", ex);
+        }
+    }
+
+    /// <summary>Stops the program and clears any pending-launch state.</summary>
+    public async Task StopAsync()
+    {
+        _launchPendingUntil = DateTime.MinValue;
+
+        try
+        {
+            await ProgramLaunchService.StopProgramAsync(this, _startedProcess);
+        }
+        catch (Exception ex)
+        {
+            LogService.LogError($"Failed to stop {Name}", ex);
+        }
+        finally
+        {
+            ReplaceStartedProcess(null);
+            IsRunning = false;
+        }
+    }
+
+    /// <summary>
+    /// Updates <see cref="IsRunning"/> from a process snapshot. A snapshot that does not see the program
+    /// is ignored while a launch is still pending.
+    /// </summary>
+    internal void RefreshRunningState(ProcessSnapshot snapshot)
+    {
+        if (string.IsNullOrWhiteSpace(Path))
+        {
+            IsRunning = false;
+            return;
+        }
+
+        if (snapshot.IsRunning(Path))
+        {
+            // Observed running: the launch (if any) has landed.
+            _launchPendingUntil = DateTime.MinValue;
             IsRunning = true;
             return;
         }
 
-        await _launchService.StartProgramAsync(this);
-        IsRunning = true;
+        if (IsLaunchPending)
+            return;
+
+        if (IsRunning)
+        {
+            // The program is gone; release the handle we were holding.
+            ReplaceStartedProcess(null);
+        }
+
+        IsRunning = false;
     }
 
-    private async Task StopProgramAsync()
+    private void ReplaceStartedProcess(Process? process)
     {
-        await _launchService.StopProgramAsync(this);
-        IsRunning = false;
+        _startedProcess?.Dispose();
+        _startedProcess = process;
     }
 
     partial void OnIsRunningChanged(bool value)
@@ -218,29 +298,8 @@ public partial class LaunchCardViewModel : ObservableObject
         OnProgramChanged?.Invoke();
     }
 
-    public void UpdateRunningStatus()
+    public void Dispose()
     {
-        if (string.IsNullOrWhiteSpace(Path))
-        {
-            IsRunning = false;
-            return;
-        }
-
-        // Check if the program is actually running (either started by us or externally)
-        bool isActuallyRunning = ProgramLaunchService.IsProgramAlreadyRunning(Path);
-        IsRunning = isActuallyRunning;
-    }
-
-    public void UpdateRunningStatus(Process[] allProcesses)
-    {
-        if (string.IsNullOrWhiteSpace(Path))
-        {
-            IsRunning = false;
-            return;
-        }
-
-        // Check if the program is actually running (either started by us or externally)
-        bool isActuallyRunning = ProgramLaunchService.IsProgramAlreadyRunning(Path, allProcesses);
-        IsRunning = isActuallyRunning;
+        ReplaceStartedProcess(null);
     }
 }

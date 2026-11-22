@@ -56,13 +56,12 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Forces the window to close, bypassing the system tray setting.
-    /// Called when user clicks "Exit" from the tray menu.
+    /// Stops the window from cancelling its next close, so an application shutdown is not blocked by
+    /// the "Close to System Tray" setting. Called before the tray menu's Exit shuts the app down.
     /// </summary>
-    public void ForceClose()
+    public void PrepareForShutdown()
     {
         _forceClose = true;
-        Close();
     }
 
     protected override void OnDataContextChanged(System.EventArgs e)
@@ -75,14 +74,14 @@ public partial class MainWindow : Window
             ViewModel.OnEditProgramRequested = ShowEditProgramDialog;
             ViewModel.OnApplicationSettingsRequested = ShowApplicationSettingsDialog;
             ViewModel.OnSaveProfileDialogRequested = ShowSaveProfileDialog;
-            ViewModel.OnLoadProfileDialogRequested = ShowLoadProfileDialog;
             ViewModel.OnSelectMainProgramRequested = ShowSelectMainProgramDialog;
 
-            // Wire up callbacks for existing cards (cards that were loaded from profile)
+            // Cards loaded during the view model's construction captured a null settings callback,
+            // because the view model is only handed to the window afterwards. Re-wire them.
             foreach (var card in ViewModel.LaunchCards)
             {
                 card.OnSettingsRequested = ShowEditProgramDialog;
-                card.OnProgramChanged = () => ViewModel.SaveCurrentProfile();
+                card.OnProgramChanged = ViewModel.SaveCurrentProfile;
             }
         }
     }
@@ -120,7 +119,7 @@ public partial class MainWindow : Window
 
             // Auto-save profile after adding program
             ViewModel.SaveCurrentProfile();
-            LogService.LogError($"Profile auto-saved after adding program: {result.Name}");
+            LogService.LogInfo($"Profile auto-saved after adding program: {result.Name}");
         }
     }
 
@@ -162,6 +161,9 @@ public partial class MainWindow : Window
             if (ViewModel != null)
             {
                 ViewModel.SaveCurrentProfile();
+
+                // The path may have changed, so re-check what is actually running.
+                ViewModel.RefreshProcessState();
                 LogService.LogInfo($"Profile auto-saved after editing program: {result.Name}");
             }
         }
@@ -269,24 +271,6 @@ public partial class MainWindow : Window
         });
 
         return file?.Path.LocalPath;
-    }
-
-    private async Task<string?> ShowLoadProfileDialog()
-    {
-        var storageProvider = StorageProvider;
-
-        var files = await storageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Load Profile",
-            AllowMultiple = false,
-            SuggestedStartLocation = await storageProvider.TryGetFolderFromPathAsync(MainWindowViewModel.ProfilesFolder),
-            FileTypeFilter =
-            [
-                new FilePickerFileType("Profile Files") { Patterns = ["*.json"] }
-            ]
-        });
-
-        return files != null && files.Count > 0 ? files[0].Path.LocalPath : null;
     }
 
     private async Task<string?> ShowSelectMainProgramDialog(string? defaultPath)

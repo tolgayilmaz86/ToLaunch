@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -6,16 +6,15 @@ using ToLaunch.Models;
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
-using System.Diagnostics;
-using System.Threading;
 using System.Reflection;
 using ToLaunch.Services;
 
 namespace ToLaunch.ViewModels;
-public partial class MainWindowViewModel : ViewModelBase
+public partial class MainWindowViewModel : ViewModelBase, IDisposable
 {
     public ObservableCollection<LaunchCardViewModel> LaunchCards { get; } = [];
     public ObservableCollection<string> Profiles { get; } = [];
@@ -78,81 +77,45 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string StartStopButtonText => AreAnyProgramsRunning ? "Stop all programs" : "Start all programs";
 
-    private Timer? _processMonitorTimer;
-    private bool _mainProgramWasRunning = false;
+    private ProcessMonitorService? _processMonitor;
+    private bool _mainProgramWasRunning;
+    private bool _isUpdatingProfile;
+    private bool _disposed;
 
     public ICommand AddProgramCommand { get; }
     public ICommand StartAllCommand { get; }
     public ICommand SaveProfileCommand { get; }
     public ICommand OpenApplicationSettingsCommand { get; }
-    public ICommand LoadProfileCommand { get; }
+    public ICommand SelectMainProgramCommand { get; }
 
     public Action? OnAddProgramRequested { get; set; }
     public Action<LaunchCardViewModel>? OnEditProgramRequested { get; set; }
     public Action? OnApplicationSettingsRequested { get; set; }
     public Func<string?, Task<string?>>? OnSaveProfileDialogRequested { get; set; }
-    public Func<Task<string?>>? OnLoadProfileDialogRequested { get; set; }
     public Func<string?, Task<string?>>? OnSelectMainProgramRequested { get; set; }
 
-    public static string ProfilesFolder => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "ToLaunch", "Profiles");
-
-    private static string SettingsFilePath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "ToLaunch", "settings.json");
-
-    private static string ProfileFilePath(string profileName) =>
-    Path.Combine(ProfilesFolder, $"{profileName}.json");
-
-    private static readonly JsonSerializerOptions CachedSerializeOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
-
-    private static readonly JsonSerializerOptions CachedDeserializeOptions = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
-
-    private bool _isUpdatingProfile = false;
-
-    private void SaveProfileToDisk(string profileName)
-    {
-        var profileModel = new ProfileModel
-        {
-            MainProgramPath = MainProgramPath,
-            MainProgramIconPath = MainProgramIconPath,
-            Programs = LaunchCards.Select(c => c.ToModel()).ToList()
-        };
-
-        var json = JsonSerializer.Serialize(profileModel, CachedSerializeOptions);
-        var filePath = ProfileFilePath(profileName);
-        File.WriteAllText(filePath, json);
-    }
-
-    private static JsonSerializerOptions GetOptions()
-    {
-        return CachedDeserializeOptions;
-    }
+    public static string ProfilesFolder => SettingsService.ProfilesFolder;
 
     public MainWindowViewModel()
     {
         AddProgramCommand = new RelayCommand(AddProgram);
-        StartAllCommand = new RelayCommand(StartAll);
+        StartAllCommand = new RelayCommand(ToggleAllPrograms);
         SaveProfileCommand = new RelayCommand(async () => await SaveProfileWithDialogAsync());
         OpenApplicationSettingsCommand = new RelayCommand(OpenApplicationSettings);
-        LoadProfileCommand = new RelayCommand(async () => await SelectMainProgramAsync());
+        SelectMainProgramCommand = new RelayCommand(async () => await SelectMainProgramAsync());
 
         // Subscribe to collection changes to update AllCardsWithAddButton
         LaunchCards.CollectionChanged += (s, e) => OnPropertyChanged(nameof(AllCardsWithAddButton));
 
+        // The XAML previewer instantiates this view model. Stop before touching the file system or
+        // starting the process monitor, which have no business running inside the designer.
+        if (Avalonia.Controls.Design.IsDesignMode)
+            return;
+
         EnsureProfilesFolderExists();
         LoadAvailableProfiles();
 
-        // Load application settings
-        LoadAppSettings();
+        AppSettings = SettingsService.Load();
 
         // Load the last selected profile from settings
         if (!string.IsNullOrWhiteSpace(AppSettings.LastSelectedProfile) && Profiles.Contains(AppSettings.LastSelectedProfile))
@@ -165,7 +128,6 @@ public partial class MainWindowViewModel : ViewModelBase
             LoadProfile(SelectedProfile);
         }
 
-        // Start process monitoring timer
         StartProcessMonitoring();
     }
 
@@ -179,25 +141,50 @@ public partial class MainWindowViewModel : ViewModelBase
         var card = new LaunchCardViewModel(model)
         {
             OnSettingsRequested = OnEditProgramRequested,
-            OnProgramChanged = () => SaveCurrentProfile()
+            OnProgramChanged = SaveCurrentProfile
         };
 
-        // Subscribe to IsRunning changes to track overall running state
-        card.PropertyChanged += (s, e) =>
-        {
-            if (e.PropertyName == nameof(LaunchCardViewModel.IsRunning))
-            {
-                UpdateAreAnyProgramsRunning();
-            }
-        };
-
+        card.PropertyChanged += Card_PropertyChanged;
         LaunchCards.Add(card);
+
+        // Pick up the new program's actual state without waiting out the monitor interval.
+        _processMonitor?.PollNow();
     }
 
     public void DeleteProgram(LaunchCardViewModel card)
     {
-        LaunchCards.Remove(card);
+        if (LaunchCards.Remove(card))
+        {
+            DetachCard(card);
+        }
+
         UpdateAreAnyProgramsRunning();
+    }
+
+    private void Card_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(LaunchCardViewModel.IsRunning))
+        {
+            UpdateAreAnyProgramsRunning();
+        }
+    }
+
+    private void DetachCard(LaunchCardViewModel card)
+    {
+        card.PropertyChanged -= Card_PropertyChanged;
+        card.OnSettingsRequested = null;
+        card.OnProgramChanged = null;
+        card.Dispose();
+    }
+
+    private void ClearLaunchCards()
+    {
+        foreach (var card in LaunchCards)
+        {
+            DetachCard(card);
+        }
+
+        LaunchCards.Clear();
     }
 
     private void UpdateAreAnyProgramsRunning()
@@ -214,140 +201,239 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private void StartAll()
+    private void SaveProfileToDisk(string profileName)
+    {
+        try
+        {
+            var profileModel = new ProfileModel
+            {
+                MainProgramPath = MainProgramPath,
+                MainProgramIconPath = MainProgramIconPath,
+                Programs = LaunchCards.Select(c => c.ToModel()).ToList()
+            };
+
+            EnsureProfilesFolderExists();
+            File.WriteAllText(SettingsService.ProfileFilePath(profileName), SettingsService.SerializeProfile(profileModel));
+        }
+        catch (Exception ex)
+        {
+            LogService.LogError($"Failed to save profile {profileName}: {ex.Message}");
+        }
+    }
+
+    /// <summary>The start/stop-all button: stops everything if anything is running, starts otherwise.</summary>
+    private void ToggleAllPrograms()
     {
         if (AreAnyProgramsRunning)
-        {
-            // Stop all running programs
-            foreach (var card in LaunchCards)
-            {
-                if (card.IsRunning)
-                {
-                    card.StartCommand.Execute(null); // This will stop the program since it's running
-                }
-            }
-        }
+            StopAllPrograms();
         else
-        {
-            // Start the main program first if defined for this profile AND setting is enabled
-            if (AppSettings.StartMainProgramWithStartAll && !string.IsNullOrWhiteSpace(MainProgramPath) && File.Exists(MainProgramPath))
-            {
-                try
-                {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = MainProgramPath,
-                        UseShellExecute = true
-                    });
-                    LogService.LogInfo($"Started main program: {MainProgramPath}");
-                }
-                catch (Exception ex)
-                {
-                    LogService.LogError("Failed to start main program", ex);
-                }
-            }
+            StartAllPrograms();
+    }
 
-            // Start all enabled cards
-            foreach (var card in LaunchCards)
+    /// <summary>
+    /// Starts the main program (when configured and enabled in settings) and every enabled card.
+    /// </summary>
+    public void StartAllPrograms()
+    {
+        if (AppSettings.StartMainProgramWithStartAll && !string.IsNullOrWhiteSpace(MainProgramPath) && File.Exists(MainProgramPath))
+        {
+            try
             {
-                if (card.IsEnabled && !card.IsRunning)
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                 {
-                    card.StartCommand.Execute(null);
-                }
+                    FileName = MainProgramPath,
+                    UseShellExecute = true
+                })?.Dispose();
+                LogService.LogInfo($"Started main program: {MainProgramPath}");
+            }
+            catch (Exception ex)
+            {
+                LogService.LogError("Failed to start main program", ex);
             }
         }
+
+        foreach (var card in LaunchCards)
+        {
+            if (card.IsEnabled && !card.IsRunning && !HasPendingStartDependency(card))
+            {
+                _ = card.StartAsync();
+            }
+        }
+    }
+
+    /// <summary>Stops every running card.</summary>
+    public void StopAllPrograms()
+    {
+        foreach (var card in LaunchCards)
+        {
+            if (card.IsRunning)
+            {
+                _ = card.StopAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Asks the process monitor for an immediate refresh, so a change to what is being watched (a new
+    /// card, an edited path) is reflected without waiting out the poll interval.
+    /// </summary>
+    public void RefreshProcessState()
+    {
+        _processMonitor?.PollNow();
     }
 
     private void StartProcessMonitoring()
     {
-        // Check for main program every 2 seconds
-        _processMonitorTimer = new Timer(CheckMainProgramStatus, null, TimeSpan.Zero, TimeSpan.FromSeconds(2));
+        _processMonitor = new ProcessMonitorService(CollectWatchedPaths, OnProcessSnapshot);
+        _processMonitor.Start();
     }
 
-    private void CheckMainProgramStatus(object? state)
+    /// <summary>
+    /// The executables the monitor should look for. Read on the UI thread before each capture.
+    /// </summary>
+    private IReadOnlyList<string?> CollectWatchedPaths()
     {
-        var allProcesses = Process.GetProcesses();
+        var paths = new List<string?>(LaunchCards.Count + 1) { MainProgramPath };
 
-        if (string.IsNullOrWhiteSpace(MainProgramPath))
+        foreach (var card in LaunchCards)
         {
-            _mainProgramWasRunning = false;
+            paths.Add(card.Path);
+        }
 
-            // Update running status for all launch cards
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            {
-                foreach (var card in LaunchCards)
-                {
-                    card.UpdateRunningStatus(allProcesses);
-                }
-            });
+        return paths;
+    }
+
+    /// <summary>
+    /// Single ordered pass over a process snapshot, on the UI thread.
+    /// </summary>
+    /// <remarks>
+    /// Order matters: card state is refreshed <em>before</em> anything is started or stopped, so a
+    /// program launched during this pass is never re-evaluated against the snapshot that predates it.
+    /// </remarks>
+    private void OnProcessSnapshot(ProcessSnapshot snapshot)
+    {
+        if (_disposed)
             return;
+
+        // 1. Refresh every card from the snapshot.
+        foreach (var card in LaunchCards)
+        {
+            card.RefreshRunningState(snapshot);
         }
 
-        var mainProgramName = Path.GetFileNameWithoutExtension(MainProgramPath);
-        var isRunning = allProcesses.Any(p =>
+        // 2. React to the main program starting or stopping.
+        bool mainProgramRunning = !string.IsNullOrWhiteSpace(MainProgramPath) && snapshot.IsRunning(MainProgramPath);
+
+        if (mainProgramRunning && !_mainProgramWasRunning)
         {
-            try
-            {
-                return p.ProcessName.Equals(mainProgramName, StringComparison.OrdinalIgnoreCase);
-            }
-            catch
-            {
-                LogService.LogWarning($"Failed to access process name for PID {p.Id}");
-                return false;
-            }
-        });
-
-        // Detect when main program starts
-        if (isRunning && !_mainProgramWasRunning)
-        {
-            _mainProgramWasRunning = true;
-
-            // Start all enabled cards with their delays
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            {
-                foreach (var card in LaunchCards)
-                {
-                    if (card.IsEnabled && !card.IsRunning)
-                    {
-                        _ = card.StartCommand.ExecuteAsync(null);
-                    }
-                }
-            });
-        }
-        else if (!isRunning && _mainProgramWasRunning)
-        {
-            _mainProgramWasRunning = false;
-
-            // Stop all enabled cards with StopOnExit enabled and reset running state
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            {
-                foreach (var card in LaunchCards)
-                {
-                    if (card.IsEnabled && card.StopOnExit && card.IsRunning)
-                    {
-                        _ = card.StartCommand.ExecuteAsync(null); // This will stop the program since it's running
-                    }
-                }
-
-                // When main program exits, ensure AreAnyProgramsRunning is false
-                AreAnyProgramsRunning = false;
-                OnPropertyChanged(nameof(StartStopButtonText));
-            });
-        }
-
-        // Update running status for all launch cards
-        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-        {
+            LogService.LogInfo("Main program started; starting enabled programs");
             foreach (var card in LaunchCards)
             {
-                card.UpdateRunningStatus(allProcesses);
+                if (card.IsEnabled && !card.IsRunning && !HasPendingStartDependency(card))
+                {
+                    _ = card.StartAsync();
+                }
             }
-        });
+        }
+        else if (!mainProgramRunning && _mainProgramWasRunning)
+        {
+            LogService.LogInfo("Main program exited; stopping programs flagged to stop on exit");
+            foreach (var card in LaunchCards)
+            {
+                if (card.IsEnabled && card.StopOnExit && card.IsRunning)
+                {
+                    _ = card.StopAsync();
+                }
+            }
+        }
+
+        _mainProgramWasRunning = mainProgramRunning;
+
+        // 3. Propagate start-with / stop-with dependencies.
+        ApplyProgramDependencies();
+
+        // 4. Recompute the summary and record this tick's state for the next one.
+        UpdateAreAnyProgramsRunning();
+
+        foreach (var card in LaunchCards)
+        {
+            card.PreviousIsRunning = card.IsRunning;
+        }
+    }
+
+    /// <summary>
+    /// Starts cards whose "start with" target has just started, and stops cards whose "stop with"
+    /// target has just stopped.
+    /// </summary>
+    /// <remarks>
+    /// Only one link of a dependency chain advances per tick, which keeps the pass bounded and makes
+    /// cycles harmless. Targets are matched on card name, the same way the settings dialog offers them.
+    /// </remarks>
+    private void ApplyProgramDependencies()
+    {
+        foreach (var card in LaunchCards)
+        {
+            if (!card.IsEnabled)
+                continue;
+
+            if (card.StartWithProgram && !card.IsRunning && !card.IsLaunchPending)
+            {
+                var target = FindCardByName(card.StartWithProgramName);
+
+                // Fire on the transition into running, not on the steady state, so a program the user
+                // deliberately stopped is not immediately restarted.
+                if (target != null && target != card && target.IsRunning && !target.PreviousIsRunning)
+                {
+                    LogService.LogInfo($"Starting {card.Name} because {target.Name} started");
+                    _ = card.StartAsync();
+                }
+            }
+
+            if (card.StopWithProgram && card.IsRunning)
+            {
+                var target = FindCardByName(card.StopWithProgramName);
+
+                if (target != null && target != card && !target.IsRunning && target.PreviousIsRunning)
+                {
+                    LogService.LogInfo($"Stopping {card.Name} because {target.Name} stopped");
+                    _ = card.StopAsync();
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// True when this card is configured to wait for another card before starting, so the bulk
+    /// "start everything" paths should leave it to <see cref="ApplyProgramDependencies"/>. A dependency
+    /// naming a program that no longer exists is treated as no dependency, so the card still starts.
+    /// </summary>
+    private bool HasPendingStartDependency(LaunchCardViewModel card)
+    {
+        if (!card.StartWithProgram)
+            return false;
+
+        var target = FindCardByName(card.StartWithProgramName);
+        return target != null && target != card;
+    }
+
+    private LaunchCardViewModel? FindCardByName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return null;
+
+        return LaunchCards.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
     }
 
     private static void EnsureProfilesFolderExists()
     {
-        Directory.CreateDirectory(ProfilesFolder);
+        try
+        {
+            Directory.CreateDirectory(SettingsService.ProfilesFolder);
+        }
+        catch (Exception ex)
+        {
+            LogService.LogError($"Failed to create profiles folder: {ex.Message}");
+        }
     }
 
     private void LoadAvailableProfiles()
@@ -356,10 +442,16 @@ public partial class MainWindowViewModel : ViewModelBase
 
         EnsureProfilesFolderExists();
 
-        var files = Directory.EnumerateFiles(ProfilesFolder, "*.json");
-        foreach (var f in files)
+        try
         {
-            Profiles.Add(Path.GetFileNameWithoutExtension(f));
+            foreach (var file in Directory.EnumerateFiles(SettingsService.ProfilesFolder, "*.json"))
+            {
+                Profiles.Add(Path.GetFileNameWithoutExtension(file));
+            }
+        }
+        catch (Exception ex)
+        {
+            LogService.LogError($"Failed to enumerate profiles: {ex.Message}");
         }
 
         // Always have a Default profile available
@@ -397,84 +489,68 @@ public partial class MainWindowViewModel : ViewModelBase
         if (OnSelectMainProgramRequested == null)
             return;
 
-        // Determine default path
-        string? defaultPath;
-        if (!string.IsNullOrWhiteSpace(MainProgramPath))
-        {
-            defaultPath = Path.GetDirectoryName(MainProgramPath);
-        }
-        else
-        {
-            defaultPath = @"C:\Program Files";
-        }
+        var defaultPath = !string.IsNullOrWhiteSpace(MainProgramPath)
+            ? Path.GetDirectoryName(MainProgramPath)
+            : @"C:\Program Files";
 
         var selectedFilePath = await OnSelectMainProgramRequested.Invoke(defaultPath);
 
-        if (!string.IsNullOrWhiteSpace(selectedFilePath) && File.Exists(selectedFilePath))
+        if (string.IsNullOrWhiteSpace(selectedFilePath) || !File.Exists(selectedFilePath))
+            return;
+
+        var programName = Path.GetFileNameWithoutExtension(selectedFilePath);
+
+        // Extract icon from the selected executable
+        try
         {
-            var programName = Path.GetFileNameWithoutExtension(selectedFilePath);
-
-            // Extract icon from the selected executable
-            try
-            {
-                var iconService = new Services.IconService();
-                var iconPath = await iconService.ExtractIconAsync(selectedFilePath);
-                MainProgramIconPath = iconPath;
-
-                // Load the icon bitmap
-                if (!string.IsNullOrEmpty(iconPath) && File.Exists(iconPath))
-                {
-                    MainProgramIcon = new Avalonia.Media.Imaging.Bitmap(iconPath);
-                }
-            }
-            catch (Exception ex)
-            {
-                LogService.LogError($"Failed to extract main program icon: {ex.Message}");
-                MainProgramIconPath = null;
-                MainProgramIcon = null;
-            }
-
-            // Check if a profile with this name already exists
-            var profileFilePath = ProfileFilePath(programName);
-            if (File.Exists(profileFilePath))
-            {
-                _isUpdatingProfile = true;
-                MainProgramPath = selectedFilePath;
-
-                // Add to profiles list if not already there
-                if (!Profiles.Contains(programName))
-                {
-                    Profiles.Add(programName);
-                }
-
-                // Set the profile name (will trigger LoadProfile via OnSelectedProfileChanged)
-                SelectedProfile = programName;
-                _isUpdatingProfile = false;
-
-                // Manually load the profile since we prevented OnSelectedProfileChanged
-                LoadProfile(programName);
-            }
-            else
-            {   // Profile doesn't exist - create new with just main program
-
-                // Clear existing cards and set main program
-                LaunchCards.Clear();
-                MainProgramPath = selectedFilePath;
-
-                // Add to profiles list
-                if (!Profiles.Contains(programName))
-                {
-                    Profiles.Add(programName);
-                }
-
-                // Save the new profile (with empty programs list)
-                SaveProfileToDisk(programName);
-
-                _isUpdatingProfile = true;
-                SelectedProfile = programName;
-                _isUpdatingProfile = false;
-            }
+            var iconService = new IconService();
+            var iconPath = await iconService.ExtractIconAsync(selectedFilePath);
+            MainProgramIconPath = iconPath;
+            MainProgramIcon = LoadBitmap(iconPath);
         }
+        catch (Exception ex)
+        {
+            LogService.LogError($"Failed to extract main program icon: {ex.Message}");
+            MainProgramIconPath = null;
+            MainProgramIcon = null;
+        }
+
+        // Check if a profile with this name already exists
+        if (File.Exists(SettingsService.ProfileFilePath(programName)))
+        {
+            _isUpdatingProfile = true;
+            MainProgramPath = selectedFilePath;
+
+            if (!Profiles.Contains(programName))
+            {
+                Profiles.Add(programName);
+            }
+
+            // Set the profile name without triggering OnSelectedProfileChanged, then load explicitly.
+            SelectedProfile = programName;
+            _isUpdatingProfile = false;
+
+            LoadProfile(programName);
+        }
+        else
+        {
+            // Profile doesn't exist - create a new one holding just the main program.
+            ClearLaunchCards();
+            MainProgramPath = selectedFilePath;
+
+            if (!Profiles.Contains(programName))
+            {
+                Profiles.Add(programName);
+            }
+
+            SaveProfileToDisk(programName);
+
+            _isUpdatingProfile = true;
+            SelectedProfile = programName;
+            _isUpdatingProfile = false;
+        }
+
+        _processMonitor?.PollNow();
     }
 
     public void LoadProfile(string profileName)
@@ -482,83 +558,72 @@ public partial class MainWindowViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(profileName))
             return;
 
-        var filePath = ProfileFilePath(profileName);
+        var filePath = SettingsService.ProfileFilePath(profileName);
         if (!File.Exists(filePath))
         {
             // Clear cards and main program if profile doesn't exist
-            LaunchCards.Clear();
+            ClearLaunchCards();
             MainProgramPath = null;
             MainProgramIconPath = null;
             MainProgramIcon = null;
             return;
         }
 
-        LoadProfileFromPath(filePath, profileName, GetOptions());
+        LoadProfileFromPath(filePath, profileName);
     }
 
-    private void LoadProfileFromPath(string filePath, string profileName, JsonSerializerOptions options)
+    private void LoadProfileFromPath(string filePath, string profileName)
     {
         try
         {
             var json = File.ReadAllText(filePath);
-            var profileModel = JsonSerializer.Deserialize<ProfileModel>(json, options);
 
-            if (profileModel != null)
-            {
-                // Load main program path
-                MainProgramPath = profileModel.MainProgramPath;
-                MainProgramIconPath = profileModel.MainProgramIconPath;
-
-                // Load main program icon bitmap
-                if (!string.IsNullOrEmpty(MainProgramIconPath) && File.Exists(MainProgramIconPath))
-                {
-                    try
-                    {
-                        MainProgramIcon = new Avalonia.Media.Imaging.Bitmap(MainProgramIconPath);
-                    }
-                    catch
-                    {
-                        MainProgramIcon = null;
-                        LogService.LogWarning($"Failed to load main program icon from path: {MainProgramIconPath}");
-                    }
-                }
-                else
-                {
-                    MainProgramIcon = null;
-                }
-
-                // Load programs
-                LaunchCards.Clear();
-                foreach (var model in profileModel.Programs ?? [])
-                {
-                    AddProgramFromModel(model);
-                }
-            }
-        }
-        catch (JsonException)
-        {
+            ProfileModel? profileModel;
             try
             {
-                var json = File.ReadAllText(filePath);
-                var models = JsonSerializer.Deserialize<List<ProgramModel>>(json, options) ?? [];
-
-                MainProgramPath = null;
-                MainProgramIconPath = null;
-                MainProgramIcon = null;
-                LaunchCards.Clear();
-                foreach (var model in models)
-                {
-                    AddProgramFromModel(model);
-                }
+                profileModel = SettingsService.Deserialize<ProfileModel>(json);
             }
-            catch (Exception ex)
+            catch (JsonException)
             {
-                LogService.LogError($"Failed to load profile {profileName}: {ex.Message}");
+                // Legacy profiles were a bare array of programs.
+                var models = SettingsService.Deserialize<List<ProgramModel>>(json) ?? [];
+                profileModel = new ProfileModel { Programs = models };
             }
+
+            if (profileModel == null)
+                return;
+
+            MainProgramPath = profileModel.MainProgramPath;
+            MainProgramIconPath = profileModel.MainProgramIconPath;
+            MainProgramIcon = LoadBitmap(MainProgramIconPath);
+
+            ClearLaunchCards();
+            foreach (var model in profileModel.Programs ?? [])
+            {
+                AddProgramFromModel(model);
+            }
+
+            _processMonitor?.PollNow();
         }
         catch (Exception ex)
         {
             LogService.LogError($"Failed to load profile {profileName}: {ex.Message}");
+        }
+    }
+
+    private static Avalonia.Media.Imaging.Bitmap? LoadBitmap(string? iconPath)
+    {
+        if (string.IsNullOrEmpty(iconPath) || !File.Exists(iconPath))
+            return null;
+
+        try
+        {
+            return new Avalonia.Media.Imaging.Bitmap(iconPath);
+        }
+        catch
+        {
+            LogService.LogWarning($"Failed to load icon from path: {iconPath}");
+            return null;
         }
     }
 
@@ -578,40 +643,23 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public void SaveAppSettings()
     {
-        try
-        {
-            AppSettings.LastSelectedProfile = SelectedProfile;
-            var json = JsonSerializer.Serialize(AppSettings, CachedSerializeOptions);
-            var directory = Path.GetDirectoryName(SettingsFilePath);
-            if (!string.IsNullOrEmpty(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-            File.WriteAllText(SettingsFilePath, json);
-        }
-        catch (Exception ex)
-        {
-            LogService.LogError($"Failed to save app settings: {ex.Message}");
-        }
+        AppSettings.LastSelectedProfile = SelectedProfile;
+        SettingsService.Save(AppSettings);
     }
 
-    private void LoadAppSettings()
+    public void Dispose()
     {
-        try
+        if (_disposed)
+            return;
+
+        _disposed = true;
+
+        _processMonitor?.Dispose();
+        _processMonitor = null;
+
+        foreach (var card in LaunchCards)
         {
-            if (File.Exists(SettingsFilePath))
-            {
-                var json = File.ReadAllText(SettingsFilePath);
-                var settings = JsonSerializer.Deserialize<AppSettings>(json, CachedDeserializeOptions);
-                if (settings != null)
-                {
-                    AppSettings = settings;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            LogService.LogError($"Failed to load app settings: {ex.Message}");
+            DetachCard(card);
         }
     }
 }

@@ -1,22 +1,29 @@
 using System;
-using System.IO;
-using System.Linq;
-using System.Text.Json;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using ToLaunch.Models;
-using ToLaunch.ViewModels;
 using Avalonia.Platform;
-using System.ComponentModel;
-using ToLaunch.Views;
 using ToLaunch.Services;
+using ToLaunch.ViewModels;
+using ToLaunch.Views;
 
 namespace ToLaunch;
 public partial class App : Application
 {
+    /// <summary>
+    /// Command line argument that the Windows "Run" registry entry appends, marking a launch that came
+    /// from Windows startup rather than from the user.
+    /// </summary>
+    public const string StartupArgument = "--startup";
+
+    /// <summary>Command line arguments, captured by <see cref="Program.Main"/>.</summary>
+    public static string[] StartupArgs { get; set; } = [];
+
     private MainWindowViewModel? _viewModel;
+    private MainWindow? _mainWindow;
     private TrayIcon? _trayIcon;
 
     public override void Initialize()
@@ -29,39 +36,24 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             _viewModel = new MainWindowViewModel();
-            var mainWindow = new MainWindow
+            _mainWindow = new MainWindow
             {
                 DataContext = _viewModel,
             };
 
-            if (!ShouldStartMinimized())
+            // Always own the window, even when starting to tray: the tray menu needs something to show,
+            // and creating it later would leave platform resources (bitmaps, popups) uninitialised.
+            desktop.MainWindow = _mainWindow;
+
+            // Avalonia shows MainWindow itself once this method returns, so starting to tray means
+            // hiding it the moment it opens rather than declining to create it.
+            if (ShouldStartMinimized())
             {
-                desktop.MainWindow = mainWindow;
+                _mainWindow.ShowInTaskbar = false;
+                _mainWindow.Opened += HideOnFirstOpen;
             }
-            else
-            {
-                // If starting minimized, ensure Avalonia platform is initialized
-                // by showing a tiny invisible window briefly. This avoids creating
-                // platform-dependent resources (bitmaps/popups) while the platform
-                // is uninitialized when changing profile from the tray.
-                try
-                {
-                    var initWindow = new Window
-                    {
-                        Width = 0,
-                        Height = 0,
-                        ShowInTaskbar = false,
-                        Opacity = 0
-                    };
-                    initWindow.Opened += (s, e) => initWindow.Hide();
-                    // Show will initialize platform; hide immediately in Opened.
-                    initWindow.Show();
-                }
-                catch
-                {
-                    // Best-effort, ignore failures here
-                }
-            }
+
+            desktop.Exit += OnExit;
         }
 
         // Setup tray icon
@@ -77,121 +69,93 @@ public partial class App : Application
         if (_viewModel != null)
         {
             _viewModel.PropertyChanged += ViewModel_PropertyChanged;
+
+            // Profiles is a get-only collection that never raises PropertyChanged, so the menu has to
+            // track the collection itself.
+            _viewModel.Profiles.CollectionChanged += Profiles_CollectionChanged;
         }
 
         base.OnFrameworkInitializationCompleted();
     }
 
     /// <summary>
-    /// Checks the settings to see if the app should start minimized.
+    /// True when this launch should go straight to the tray: the setting is on <em>and</em> Windows
+    /// started us. Launching ToLaunch by hand always shows the window.
     /// </summary>
     private static bool ShouldStartMinimized()
     {
-        try
-        {
-            var settingsPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "ToLaunch", "settings.json");
+        bool launchedByWindows = Array.Exists(
+            StartupArgs,
+            arg => string.Equals(arg, StartupArgument, StringComparison.OrdinalIgnoreCase));
 
-            if (File.Exists(settingsPath))
-            {
-                var json = File.ReadAllText(settingsPath);
-                var settings = JsonSerializer.Deserialize<AppSettings>(json, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
-
-                return settings?.StartMinimized ?? false;
-            }
-        }
-        catch
-        {
-            // If we can't read settings, default to not starting minimized
-        }
-
-        return false;
+        return launchedByWindows && SettingsService.Load().StartMinimized;
     }
 
-    public void TrayIcon_Show_Click(object? sender, System.EventArgs e)
+    private void HideOnFirstOpen(object? sender, EventArgs e)
     {
-        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        if (sender is Window window)
         {
-            if (desktop.MainWindow == null)
-            {
-                var mainWindow = new MainWindow
-                {
-                    DataContext = _viewModel,
-                };
-                desktop.MainWindow = mainWindow;
-            }
-            var window = desktop.MainWindow;
-            if (window != null)
-            {
-                window.ShowInTaskbar = true;
-                window.Show();
-                window.Activate();
-            }
+            window.Opened -= HideOnFirstOpen;
+            window.Hide();
         }
     }
 
-    public void TrayIcon_Exit_Click(object? sender, System.EventArgs e)
+    public void TrayIcon_Show_Click(object? sender, EventArgs e)
     {
+        if (_mainWindow == null)
+            return;
+
+        _mainWindow.ShowInTaskbar = true;
+        _mainWindow.WindowState = WindowState.Normal;
+        _mainWindow.Show();
+        _mainWindow.Activate();
+    }
+
+    public void TrayIcon_Exit_Click(object? sender, EventArgs e)
+    {
+        // The window cancels Closing when "Close to System Tray" is on, which would also cancel the
+        // shutdown. Tell it this close is the real thing.
+        _mainWindow?.PrepareForShutdown();
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.Shutdown();
         }
     }
 
-    public void TrayIcon_StartAll_Click(object? sender, System.EventArgs e)
+    public void TrayIcon_StartAll_Click(object? sender, EventArgs e)
     {
-        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-        {
-            var viewModel = desktop.MainWindow?.DataContext as MainWindowViewModel ?? _viewModel;
-            if (viewModel != null)
-            {
-                // Start all enabled programs that are not running
-                foreach (var card in viewModel.LaunchCards)
-                {
-                    if (card.IsEnabled && !card.IsRunning)
-                    {
-                        card.StartCommand.Execute(null);
-                    }
-                }
-            }
-        }
+        _viewModel?.StartAllPrograms();
     }
 
-    public void TrayIcon_StopAll_Click(object? sender, System.EventArgs e)
+    public void TrayIcon_StopAll_Click(object? sender, EventArgs e)
     {
-        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-        {
-            var viewModel = desktop.MainWindow?.DataContext as MainWindowViewModel ?? _viewModel;
-            if (viewModel != null)
-            {
-                // Stop all enabled programs that are actually running (check by process name)
-                foreach (var card in viewModel.LaunchCards)
-                {
-                    if (card.IsEnabled && !string.IsNullOrWhiteSpace(card.Path))
-                    {
-                        // Check if the process is actually running, not just the IsRunning flag
-                        if (card.IsRunning || Services.ProgramLaunchService.IsProgramAlreadyRunning(card.Path))
-                        {
-                            card.StartCommand.Execute(null);
-                        }
-                    }
-                }
-            }
-        }
+        _viewModel?.StopAllPrograms();
+    }
+
+    private void OnExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
+    {
+        _viewModel?.Dispose();
     }
 
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(MainWindowViewModel.SelectedProfile) || e.PropertyName == nameof(MainWindowViewModel.Profiles))
+        if (e.PropertyName == nameof(MainWindowViewModel.SelectedProfile))
         {
-            if (_trayIcon != null)
-            {
-                _trayIcon.Menu = BuildTrayMenu();
-            }
+            RebuildTrayMenu();
+        }
+    }
+
+    private void Profiles_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        RebuildTrayMenu();
+    }
+
+    private void RebuildTrayMenu()
+    {
+        if (_trayIcon != null)
+        {
+            _trayIcon.Menu = BuildTrayMenu();
         }
     }
 
@@ -225,12 +189,17 @@ public partial class App : Application
         {
             foreach (var profile in _viewModel.Profiles)
             {
-                var profileItem = new NativeMenuItem(profile)
+                var profileName = profile;
+                var profileItem = new NativeMenuItem(profileName)
                 {
                     ToggleType = NativeMenuItemToggleType.Radio,
-                    IsChecked = profile == _viewModel.SelectedProfile
+                    IsChecked = profileName == _viewModel.SelectedProfile
                 };
-                profileItem.Click += (s, e) => { if (_viewModel != null) _viewModel.SelectedProfile = profile; };
+                profileItem.Click += (s, e) =>
+                {
+                    if (_viewModel != null)
+                        _viewModel.SelectedProfile = profileName;
+                };
                 profilesMenu.Add(profileItem);
             }
         }

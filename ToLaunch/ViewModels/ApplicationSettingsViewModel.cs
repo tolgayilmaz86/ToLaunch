@@ -29,34 +29,6 @@ public partial class ApplicationSettingsViewModel : ViewModelBase
     /// </summary>
     public bool IsRunningAsAdmin => AdminHelper.IsRunningAsAdministrator();
 
-    /// <summary>
-    /// Text to display for the Run as Administrator checkbox based on current elevation state.
-    /// </summary>
-    public string RunAsAdminText => IsRunningAsAdmin 
-        ? "Run as Administrator (Currently elevated)" 
-        : "Run as Administrator";
-
-    /// <summary>
-    /// Description text for the Run as Administrator setting.
-    /// </summary>
-    public string RunAsAdminDescription => IsRunningAsAdmin
-        ? "ToLaunch is already running with administrator privileges."
-        : "Restart ToLaunch with elevated privileges. A UAC prompt will appear.";
-
-    public ApplicationSettingsViewModel()
-    {
-    }
-
-    public ApplicationSettingsViewModel(bool startWithWindows, bool startMinimized, bool closeToSystemTray, bool minimizeToSystemTray, bool startMainProgramWithStartAll, bool runAsAdministrator)
-    {
-        StartWithWindows = startWithWindows;
-        StartMinimized = startMinimized;
-        CloseToSystemTray = closeToSystemTray;
-        MinimizeToSystemTray = minimizeToSystemTray;
-        StartMainProgramWithStartAll = startMainProgramWithStartAll;
-        RunAsAdministrator = runAsAdministrator;
-    }
-
     public AppSettings ToModel()
     {
         return new AppSettings

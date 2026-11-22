@@ -42,8 +42,9 @@ public static class StartupService
                     return false;
                 }
 
-                // Add to startup with quoted path and --startup argument to indicate startup launch
-                key.SetValue(AppName, $"\"{exePath}\" --startup");
+                // Quote the path and pass the startup marker, so App can tell a Windows-startup launch
+                // from the user opening ToLaunch themselves.
+                key.SetValue(AppName, $"\"{exePath}\" {App.StartupArgument}");
                 LogService.LogInfo($"Added ToLaunch to Windows startup: {exePath}");
             }
             else
@@ -62,28 +63,4 @@ public static class StartupService
         }
     }
 
-    /// <summary>
-    /// Checks if the application is currently set to start with Windows.
-    /// </summary>
-    /// <returns>True if startup is enabled, false otherwise.</returns>
-    public static bool IsStartWithWindowsEnabled()
-    {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            return false;
-
-        try
-        {
-            using var key = Registry.CurrentUser.OpenSubKey(RegistryRunKey, writable: false);
-            if (key == null)
-                return false;
-
-            var value = key.GetValue(AppName);
-            return value != null;
-        }
-        catch (Exception ex)
-        {
-            LogService.LogError($"Failed to check startup registry: {ex.Message}");
-            return false;
-        }
-    }
 }
