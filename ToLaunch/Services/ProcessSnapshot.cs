@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -17,9 +17,10 @@ namespace ToLaunch.Services;
 /// being watched the process table is never enumerated at all.
 /// </para>
 /// <para>
-/// Lookups match on the full executable path, falling back to the executable name when the path of a
-/// candidate cannot be read. Matching on the name alone would let a card act on an unrelated program
-/// that merely happens to share its file name.
+/// Lookups match on the full executable path, also accepting a process running from inside the
+/// configured executable's own directory tree (how launcher stubs such as Squirrel behave), and
+/// falling back to the executable name when a candidate's path cannot be read at all. Matching on the
+/// name alone would let a card act on an unrelated program that merely happens to share its file name.
 /// </para>
 /// </remarks>
 public sealed class ProcessSnapshot : IDisposable
@@ -114,20 +115,72 @@ public sealed class ProcessSnapshot : IDisposable
         if (expectedPath == null)
             return candidates;
 
+        var expectedDirectory = GetContainingDirectoryForMatching(expectedPath);
+
         List<Process>? matches = null;
         foreach (var candidate in candidates)
         {
-            var actualPath = GetImagePath(candidate);
-
-            // A path that resolved and differs is definitively a different program. A path that could
-            // not be resolved falls back to the name match rather than silently ignoring the process.
-            if (actualPath != null && !string.Equals(actualPath, expectedPath, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            (matches ??= []).Add(candidate);
+            if (IsMatch(GetImagePath(candidate), expectedPath, expectedDirectory))
+                (matches ??= []).Add(candidate);
         }
 
         return matches ?? NoMatches;
+    }
+
+    /// <summary>
+    /// Decides whether a name-matched process really is the configured program.
+    /// </summary>
+    /// <remarks>
+    /// Three cases count as a match:
+    /// <list type="number">
+    /// <item>the paths are equal, the straightforward case;</item>
+    /// <item>the running image sits inside the configured executable's own directory tree. Launcher
+    /// stubs do this: Squirrel installs <c>%LOCALAPPDATA%\App\App.exe</c> as a shim that runs
+    /// <c>%LOCALAPPDATA%\Apppp-1.2.3\App.exe</c>, so the process never reports the path the user
+    /// picked. The shared directory keeps this from matching an unrelated program;</item>
+    /// <item>the running image's path could not be read at all (an elevated process, say), where the
+    /// name match is the only evidence available.</item>
+    /// </list>
+    /// </remarks>
+    private static bool IsMatch(string? actualPath, string expectedPath, string? expectedDirectory)
+    {
+        // Case 3: nothing to compare against, so trust the name.
+        if (actualPath == null)
+            return true;
+
+        // Case 1.
+        if (string.Equals(actualPath, expectedPath, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // Case 2.
+        return expectedDirectory != null
+            && actualPath.StartsWith(expectedDirectory, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The configured executable's directory, with a trailing separator, for the subtree test.
+    /// Returns null when that directory is a volume root, since "anywhere on this drive" is too broad
+    /// to tell two programs apart.
+    /// </summary>
+    private static string? GetContainingDirectoryForMatching(string expectedPath)
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(expectedPath);
+            if (string.IsNullOrEmpty(directory))
+                return null;
+
+            // A path like "C:\" or "\server\share" is its own root; refuse to match on it.
+            if (string.Equals(Path.GetPathRoot(directory), directory, StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            return directory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                   + Path.DirectorySeparatorChar;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
     }
 
     private string? GetImagePath(Process process)
